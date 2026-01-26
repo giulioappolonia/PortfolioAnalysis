@@ -6,113 +6,113 @@ import tempfile
 from data_loader import load_data # Assumi che esista data_loader.py con la funzione load_data
 from rolling_calculations import (calculate_rolling_returns, calculate_min_median_by_window, calculate_risk_metrics, create_portfolio) # Assumi esista rolling_calculations.py
 from plots import (plot_rolling_returns, plot_boxplot, plot_violinplot, plot_min_vs_window, plot_median_vs_window, plot_combined_min_median, plot_detailed_window_analysis) # Assumi esista plots.py
-from MSCI_to_Curvo_converter import convert_history_index # Assumi esista MSCI_to_Curvo_converter.py
+
 from risk_metrics import PortfolioRiskMetrics # Importa la classe delle metriche di rischio
 import math # Needed for sqrt(12)
 
 # Dizionario contenente le spiegazioni dettagliate per ciascuna metrica.
 METRIC_EXPLANATIONS = {
     "Annualized Return (%)": {
-        "Cos'è": "Misura il guadagno o la perdita media per anno, supponendo che gli utili vengano reinvestiti. Consente il confronto diretto tra investimenti detenuti per periodi di tempo diversi.",
-        "Come viene calcolato": "Si basa sul rendimento totale del periodo di investimento, proiettato su base annuale utilizzando un tasso di crescita composto. La formula comune è `(1 + Rendimento Totale)^(1 / Anni Totali) - 1`.",
-        "Cosa indica per l'investitore": "Rappresenta il tasso di crescita effettivo medio annuo dell'investimento. È una misura chiave della redditività.",
-        "Meglio alto o basso?": "**Meglio alto**. Un valore più elevato indica una maggiore redditività annuale.",
+        "Cos'è": "Guadagno medio annuo composto dell'investimento.",
+        "Come viene calcolato": "Rendimento totale proiettato su un anno standardizzato.",
+        "Cosa indica": "La velocità media di crescita del capitale.",
+        "Meglio": "**Alto**. Più è alto, maggiore è il profitto.",
     },
     "Annualized Volatility (%)": {
-        "Cos'è": "Misura la dispersione (deviazione standard) dei rendimenti dell'investimento attorno alla sua media, annualizzata. È una misura comune del rischio totale (sia al rialzo che al ribasso).",
-        "Come viene calcolato": "La deviazione standard dei rendimenti periodici (es. mensili) moltiplicata per la radice quadrata del numero di periodi in un anno (fattore di annualizzazione). Formula tipica: `Deviazione Standard Periodica * sqrt(Fattore Annualizzazione)`.",
-        "Cosa indica per l'investitore": "Indica quanto il valore dell'investimento tende a fluttuare. Una maggiore volatilità significa che il prezzo può cambiare drasticamente in un breve periodo, in entrambe le direzioni.",
-        "Meglio alto o basso?": "**Meglio basso**. Un valore più basso indica un'investimento più stabile con minori oscillazioni di prezzo, il che è generalmente preferito dagli investitori avversi al rischio.",
+        "Cos'è": "Misura di quanto il prezzo oscilla attorno alla media.",
+        "Come viene calcolato": "Deviazione standard dei rendimenti annualizzata.",
+        "Cosa indica": "Incertezza e instabilità. Alta volatilità significa forti sbalzi di prezzo.",
+        "Meglio": "**Basso**. Indica un andamento più stabile e prevedibile.",
     },
     "Max Drawdown (%)": {
-        "Cos'è": "Rappresenta la massima perdita percentuale dal picco storico (punto più alto) al successivo punto più basso (punto di minimo) prima che un nuovo picco venga raggiunto. Misura il rischio di \"caduta\" di un investimento.",
-        "Come viene calcolato": "Si identifica la serie storica dei massimi cumulativi del NAV. Il drawdown in qualsiasi momento è la perdita percentuale rispetto al massimo cumulativo raggiunto fino a quel momento. Il Max Drawdown è il valore più negativo di questa serie di drawdown.",
-        "Cosa indica per l'investitore": "Indica la peggiore perdita potenziale che un investitore avrebbe subito se avesse acquistato al picco e venduto al punto più basso successivo. È una misura critica del rischio di coda e della capacità di recupero.",
-        "Meglio alto o basso?": "**Meglio basso (meno negativo)**. Un valore più vicino allo zero (o meno negativo) indica che l'investimento ha subito perdite massime meno severe.",
+        "Cos'è": "La peggiore perdita percentuale registrata dai massimi storici.",
+        "Come viene calcolato": "Massimo calo dal picco precedente al minimo successivo.",
+        "Cosa indica": "Il rischio massimo storico. Quanto avresti perso nel momento peggiore.",
+        "Meglio": "**Basso (vicino a 0)**. Indica perdite massime contenute.",
     },
     "Ulcer Index": {
-        "Cos'è": "Una misura del rischio di drawdown che considera sia la *magnitudine* che la *durata* dei drawdown. Penalizza i drawdown più ampi e più lunghi. È una metrica chiave nel contesto di teorie alternative che si concentrano sul rischio di drawdown.",
-        "Come viene calcolato": "È la radice quadrata della media dei drawdown percentuali al quadrato. `UI = sqrt(mean(Drawdown_t^2))`, dove Drawdown_t è il drawdown percentuale (in decimale) al tempo t rispetto al picco precedente. Il valore viene spesso rappresentato come percentuale.",
-        "Cosa indica per l'investitore": "Fornisce una metrica più completa del rischio di drawdown rispetto al solo Max Drawdown, considerando il \"dolore\" causato da drawdown prolungati. Un valore elevato suggerisce che l'investimento ha trascorso periodi significativi in uno stato di drawdown profondo.",
-        "Meglio alto o basso?": "**Meglio basso**. Un valore più basso indica drawdown meno gravi o di durata inferiore nel tempo.",
+        "Cos'è": "Misura lo stress dell'investitore combinando profondità e durata dei cali.",
+        "Come viene calcolato": "Media quadratica di tutti i drawdown.",
+        "Cosa indica": "La 'quantità di dolore' sofferta. Penalizza periodi lunghi e profondi di perdita.",
+        "Meglio": "**Basso**. Indica cali brevi e poco profondi.",
     },
     "Ulcer Performance Index": {
-        "Cos'è": "Un ratio di performance aggiustato per il rischio che utilizza l'Ulcer Index come misura del rischio. Proposto come un modo per valutare l'efficienza del rendimento rispetto al rischio di drawdown considerando la durata e l'ampiezza delle perdite.",
-        "Come viene calcolato": "Rendimento Annualizzato diviso per l'Ulcer Index. `UPI = Rendimento Annualizzato / Ulcer Index`.",
-        "Cosa indica per l'investitore": "Indica quanti \"punti\" di rendimento annualizzato sono stati generati per ogni \"punto\" di Ulcer Index. È una misura di efficienza del rendimento rispetto al rischio di drawdown (considerando durata e ampiezza).",
-        "Meglio alto o basso?": "**Meglio alto**. Un valore più elevato indica un miglior rendimento rispetto al rischio di Ulcer Index.",
+        "Cos'è": "Rendimento ottenuto per ogni unità di 'stress' (Ulcer Index).",
+        "Come viene calcolato": "Rendimento Annualizzato / Ulcer Index.",
+        "Cosa indica": "Efficienza nel generare profitti minimizzando la sofferenza dei cali.",
+        "Meglio": "**Alto**. Indica ottimi ritorni con poco stress.",
     },
-    "DaR(95%) (%)": { # Adatta la chiave al formato usato nel DataFrame
-        "Cos'è": "Stima la perdita massima di drawdown che non dovrebbe essere superata con una certa probabilità (es. 95%) in un dato periodo, basandosi sulla distribuzione storica dei drawdown. È il VaR applicato alla distribuzione dei drawdown, rilevante per valutare il rischio di coda.",
-        "Come viene calcolato": "È il quantile α-esimo della serie storica dei drawdown (generalmente con α=0.05 per il 95%). `DaR(α) = Quantile(α) dei Drawdown`.",
-        "Cosa indica per l'investitore": "Fornisce una stima della potenziale perdita di picco che l'investitore potrebbe affrontare nel 5% dei casi peggiori, basandosi sulla storia.",
-        "Meglio alto o basso?": "**Meglio basso (meno negativo)**. Un valore più vicino allo zero indica un rischio di drawdown di coda inferiore.",
+    "DaR(95%) (%)": { 
+        "Cos'è": "Drawdown at Risk. La perdita che non dovrebbe essere superata nel 95% dei casi peggiori.",
+        "Come viene calcolato": "Soglia del 5% peggiore dei drawdown storici.",
+        "Cosa indica": "Quanto potresti perdere in una situazione di mercato negativa ma non estrema.",
+        "Meglio": "**Basso (vicino a 0)**.",
     },
-    "CDaR(95%) (%)": { # Adatta la chiave al formato usato nel DataFrame
-        "Cos'è": "Rappresenta la perdita media dei drawdown che si verificano quando il drawdown è peggiore del DaR. È il CVaR (o Expected Shortfall) applicato alla distribuzione dei drawdown, una misura del rischio di coda \"oltre il VaR\".",
-        "Come viene calcolato": "È la media di tutti i drawdown storici che sono inferiori o uguali al DaR(α). `CDaR(α) = Media(Drawdown | Drawdown <= DaR(α))`.",
-        "Cosa indica per l'investitore": "Fornisce una stima della perdita media che l'investitore subirebbe nel 5% dei casi peggiori *una volta che il DaR viene superato*. È una misura del rischio di coda più informativa del solo DaR.",
-        "Meglio alto o basso?": "**Meglio basso (meno negativo)**. Un valore più vicino allo zero indica perdite medie meno severe nella coda peggiore della distribuzione dei drawdown.",
+    "CDaR(95%) (%)": { 
+        "Cos'è": "Conditional DaR. La perdita media che si verifica negli scenari estremi (oltre il DaR).",
+        "Come viene calcolato": "Media dei drawdown peggiori del 5%.",
+        "Cosa indica": "Il danno atteso durante un crollo di mercato grave ('Cigno Nero').",
+        "Meglio": "**Basso (vicino a 0)**.",
     },
     "Pitfall Indicator": {
-        "Cos'è": "Una misura di rischio proposta nel contesto di teorie alternative, che confronta la gravità del CDaR (rischio di coda sui drawdown) con la volatilità totale (rischio di oscillazione generale). Aiuta a capire quanto il rischio di coda contribuisca al rischio complessivo.",
-        "Come viene calcolato": "Valore Assoluto del CDaR (sui drawdown decimali) diviso per la Volatilità Annualizzata (decimale). `Pitfall Indicator = |CDaR| / Volatilità Annualizzata`.",
-        "Cosa indica per l'investitore": "Aiuta a capire quanto del rischio totale (misurato dalla volatilità) sia concentrato nella coda peggiore dei drawdown (misurata dal CDaR). Un valore più alto suggerisce che il rischio di drawdown di coda è proporzionalmente maggiore rispetto alla volatilità generale.",
-        "Meglio alto o basso?": "**Meglio basso**. Un valore più basso indica che il rischio di drawdown di coda è meno significativo rispetto alla volatilità complessiva.",
+        "Cos'è": "Indica quanto i crolli sono 'sorprendenti' rispetto alla normale volatilità.",
+        "Come viene calcolato": "|CDaR| / Volatilità Annualizzata.",
+        "Cosa indica": "Rischio nascosto. Se alto, l'asset sembra tranquillo ma ha crolli improvvisi e violenti.",
+        "Meglio": "**Basso**. Indica che i crolli sono proporzionati alla volatilità.",
     },
     "Penalized Risk (%)": {
-        "Cos'è": "Una misura composita di rischio proposta in teorie alternative, che combina l'Ulcer Index (durata e ampiezza dei drawdown) con il Pitfall Indicator (rischio di coda sui drawdown rispetto alla volatilità). Cerca di fornire una visione olistica del rischio legato ai drawdown e alle perdite estreme.",
-        "Come viene calcolato": "Prodotto dell'Ulcer Index (decimale) e del Pitfall Indicator (decimale). `Penalized Risk = Ulcer Index * Pitfall Indicator`. Il risultato viene spesso rappresentato come percentuale.",
-        "Cosa indica per l'investitore": "Questa metrica cerca di catturare il rischio da diverse angolazioni legate ai drawdown e al rischio di coda. Un valore elevato suggerisce che l'investimento presenta sia drawdown significativi sia un rischio di coda proporzionalmente alto.",
-        "Meglio alto o basso?": "**Meglio basso**. Un valore più basso indica un profilo di rischio di drawdown più favorevole secondo questa metrica composita.",
+        "Cos'è": "Rischio totale che pesa sia la durata dei cali (Ulcer) che la loro violenza estrema (Pitfall).",
+        "Come viene calcolato": "Ulcer Index * Pitfall Indicator.",
+        "Cosa indica": "Una visione completa del rischio: quanto a lungo perdi e quanto violentemente.",
+        "Meglio": "**Basso**.",
     },
     "Serenity Ratio": {
-        "Cos'è": "Il ratio di performance principale proposto nel contesto di teorie alternative, che confronta il Rendimento Annualizzato con il Penalized Risk. Simile allo Sharpe Ratio, ma utilizzando una misura di rischio alternativa incentrata sui drawdown e il rischio di coda.",
-        "Come viene calcolato": "Rendimento Annualizzato (decimale) diviso per il Penalized Risk (decimale). `Serenity Ratio = Rendimento Annualizzato / Penalized Risk`.",
-        "Cosa indica per l'investitore": "Misura il rendimento annualizzato generato per unità di \"rischio penalizzato\". È un indicatore di efficienza che preferisce gli investimenti con alti rendimenti e basso Penalized Risk, offrendo una prospettiva diversa sulla performance aggiustata per il rischio rispetto alle metriche tradizionali basate sulla volatilità totale.",
-        "Meglio alto o basso?": "**Meglio alto**. Un valore più elevato indica una migliore performance aggiustata per il rischio secondo la definizione di rischio del PDF.",
+        "Cos'è": "La metrica definitiva di efficienza nella teoria alternativa.",
+        "Come viene calcolato": "Rendimento Annualizzato / Penalized Risk.",
+        "Cosa indica": "Generazione di rendimento con il minimo rischio totale (stress + eventi estremi).",
+        "Meglio": "**Alto**.",
     },
      "Total Return (%)": {
-        "Cos'è": "Misura il cambiamento percentuale complessivo del valore dell'investimento dall'inizio alla fine del periodo considerato.",
-        "Come viene calcolato": "`(Valore Finale - Valore Iniziale) / Valore Iniziale * 100`.",
-        "Cosa indica per l'investitore": "Rappresenta il guadagno o la perdita complessiva sull'investimento per l'intero orizzonte temporale. Utile per vedere la performance assoluta, ma non consente confronti diretti tra periodi di durata diversa.",
-        "Meglio alto o basso?": "**Meglio alto**. Un valore più elevato indica un maggiore guadagno complessivo.",
+        "Cos'è": "Guadagno complessivo cumulato dall'inizio alla fine.",
+        "Come viene calcolato": "(Valore Finale - Iniziale) / Iniziale.",
+        "Cosa indica": "Il risultato finale assoluto dell'investimento.",
+        "Meglio": "**Alto**.",
     },
     "Downside Risk (%)": {
-        "Cos'è": "Misura la volatilità dei rendimenti negativi rispetto a un valore obiettivo (tipicamente 0% o il tasso privo di rischio), annualizzata. Ignora la volatilità dei rendimenti positivi, concentrandosi solo sul rischio di perdite.",
-        "Come viene calcolato": "La deviazione standard dei rendimenti periodici inferiori al tasso obiettivo (es. 0% o tasso privo di rischio), rispetto a tale tasso obiettivo, annualizzata.",
-        "Cosa indica per l'investitore": "Si concentra solo sul rischio di perdite. Una maggiore Downside Risk indica oscillazioni negative più ampie o più frequenti al di sotto del tasso obiettivo.",
-        "Meglio alto o basso?": "**Meglio basso**. Un valore più basso indica un rischio di perdite inferiore.",
+        "Cos'è": "Volatilità considerata solo quando i prezzi scendono.",
+        "Come viene calcolato": "Deviazione standard dei soli rendimenti negativi.",
+        "Cosa indica": "Il vero rischio di perdere denaro, ignorando la volatilità 'positiva' (rialzi).",
+        "Meglio": "**Basso**.",
     },
     "Sharpe Ratio": {
-        "Cos'è": "Misura il rendimento in eccesso (rendimento al di sopra del tasso privo di rischio) generato per unità di rischio totale (volatilità annualizzata). È uno dei ratio di performance aggiustata per il rischio più utilizzati, basato sull'assunzione che la volatilità rappresenti adeguatamente tutto il rischio.",
-        "Come viene calcolato": "`(Rendimento Annualizzato - Tasso Privo di Rischio Annualizzato) / Volatilità Annualizzata`.",
-        "Cosa indica per l'investitore": "Indica quanto rendimento aggiuntivo si ottiene per assumere una maggiore volatilità. Un valore più alto suggerisce un portafoglio più efficiente nel generare rendimento dato il rischio totale misurato dalla volatilità.",
-        "Meglio alto o basso?": "**Meglio alto**. Un valore più elevato indica una migliore performance aggiustata per la volatilità.",
+        "Cos'è": "Rendimento per unità di rischio totale (volatilità).",
+        "Come viene calcolato": "Rendimento / Volatilità.",
+        "Cosa indica": "Efficienza classica. Quanto 'paga' assumersi dei rischi standard.",
+        "Meglio": "**Alto**.",
     },
     "Sortino Ratio": {
-        "Cos'è": "Simile allo Sharpe Ratio, ma utilizza il Downside Risk (volatilità solo dei rendimenti negativi) al posto della volatilità totale. Si concentra sul rendimento in eccesso per unità di rischio di rendimenti negativi.",
-        "Come viene calcolato": "`(Rendimento Annualizzato - Tasso Privo di Rischio Annualizzato) / Downside Risk Annualizzato`.",
-        "Cosa indica per l'investitore": "Indica quanti rendimenti in eccesso si ottengono per ogni unità di rischio di perdite al di sotto di un obiettivo. È preferito da molti investitori rispetto allo Sharpe Ratio perché penalizza solo la volatilità negativa, allineandosi meglio con la percezione comune di rischio come \"perdita\".",
-        "Meglio alto o basso?": "**Meglio alto**. Un valore più elevato indica una migliore performance aggiustata per il rischio di rendimenti negativi.",
+        "Cos'è": "Rendimento per unità di rischio 'cattivo' (perdite).",
+        "Come viene calcolato": "Rendimento / Downside Risk.",
+        "Cosa indica": "Efficienza nel generare profitti minimizzando solo le perdite (non le oscillazioni).",
+        "Meglio": "**Alto**.",
     },
     "Calmar Ratio": {
-        "Cos'è": "Misura il rendimento annualizzato rispetto alla massima perdita subita (Max Drawdown assoluto). È una metrica semplice ma efficace per confrontare il rendimento con il peggiore calo storico.",
-        "Come viene calcolato": "Rendimento Annualizzato diviso per il valore assoluto del Max Drawdown. `Calmar Ratio = Rendimento Annualizzato / |Max Drawdown|`.",
-        "Cosa indica per l'investitore": "È una metrica di performance aggiustata per il rischio che si concentra specificamente sul rischio di drawdown estremo. Un valore più alto indica che l'investimento ha generato un buon rendimento annualizzato rispetto alla sua peggiore caduta storica.",
-        "Meglio alto o basso?": "**Meglio alto**. Un valore più elevato indica un miglior rendimento rispetto al massimo drawdown.",
+        "Cos'è": "Rendimento rispetto al peggior crollo storico.",
+        "Come viene calcolato": "Rendimento / |Max Drawdown|.",
+        "Cosa indica": "Resilienza: capacità di recuperare e guadagnare dopo il peggior disastro.",
+        "Meglio": "**Alto**.",
     },
-     "VaR_Returns(95%) (%)": { # Adatta la chiave al formato usato nel DataFrame
-        "Cos'è": "Stima la perdita massima sui *rendimenti* periodici che non si prevede venga superata con una certa probabilità (es. 95%) in un dato periodo, basandosi sulla distribuzione storica dei rendimenti. È una misura del rischio di coda per i rendimenti periodici.",
-        "Come viene calcolato": "È il quantile α-esimo della serie storica dei rendimenti periodici (generalmente con α=0.05 per il 95%). `VaR(α) = Quantile(α) dei Rendimenti`.",
-        "Cosa indica per l'investitore": "Fornisce una stima della potenziale perdita di rendimento per un singolo periodo (es. un mese) nel 5% dei casi peggiori.",
-        "Meglio alto o basso?": "**Meglio basso (meno negativo)**. Un valore più vicino allo zero indica un rischio di perdita periodica di coda inferiore sui rendimenti.",
+     "VaR_Returns(95%) (%)": { 
+        "Cos'è": "Value at Risk. Massima perdita periodica attesa nel 95% dei casi.",
+        "Come viene calcolato": "Quantile 5% dei rendimenti periodici.",
+        "Cosa indica": "Il rischio 'normale' di mercato su base periodica (es. mensile).",
+        "Meglio": "**Basso (vicino a 0)**.",
     },
-    "CVaR_Returns(95%) (%)": { # Adatta la chiave al formato usato nel DataFrame
-        "Cos'è": "Rappresenta la perdita media sui *rendimenti* periodici che si verificano quando il rendimento è peggiore del VaR sui rendimenti. È il CVaR (o Expected Shortfall) applicato alla distribuzione dei rendimenti, una misura più completa del rischio di coda sui rendimenti periodici rispetto al solo VaR.",
-        "Come viene calcolato": "È la media di tutti i rendimenti periodici storici che sono inferiori o uguali al VaR sui rendimenti (VaR_Returns). `CVaR(α) = Media(Rendimento | Rendimento <= VaR_Returns(α))`.",
-        "Cosa indica per l'investitore": "Fornisce una stima della perdita media che l'investitore subirebbe in un singolo periodo nel 5% dei casi peggiori *una volta che il VaR sui rendimenti viene superato*. È il rischio medio in caso di eventi di rendimento estremi negativi.",
-        "Meglio alto o basso?": "**Meglio basso (meno negativo)**. Un valore più vicino allo zero indica perdite medie meno severe nella coda peggiore della distribuzione dei rendimenti.",
+    "CVaR_Returns(95%) (%)": { 
+        "Cos'è": "Conditional VaR. Perdita media periodica negli scenari peggiori.",
+        "Come viene calcolato": "Media delle perdite che superano il VaR.",
+        "Cosa indica": "Quanto ci si aspetta di perdere quando le cose vanno molto male.",
+        "Meglio": "**Basso (vicino a 0)**.",
     },
 }
 
@@ -148,120 +148,136 @@ def main():
     loaded_dfs = {} # Dizionario per conservare i DataFrames caricati da ciascun file
 
     if uploaded_files:
-        st.info(f"Caricati {len(uploaded_files)} file. Elaborazione...")
-        with tempfile.TemporaryDirectory() as temp_dir:
-            for uploaded_file in uploaded_files:
-                try:
-                    temp_input_path = os.path.join(temp_dir, uploaded_file.name)
-                    with open(temp_input_path, "wb") as f:
-                        f.write(uploaded_file.getvalue())
-
-                    file_extension = os.path.splitext(uploaded_file.name)[1].lower()
-                    data = None
-                    file_identifier = os.path.splitext(uploaded_file.name)[0]
-
-                    if file_extension == ".csv":
-                        st.write(f"Processando file CSV: {uploaded_file.name}")
-                        data = load_data(temp_input_path)
-                    elif file_extension in [".xls", ".xlsx"]:
-                        st.write(f"Processando file Excel: {uploaded_file.name}. Conversione in CSV...")
-                        temp_csv_path = os.path.join(temp_dir, f"converted_{file_identifier}.csv")
-                        try:
-                            convert_history_index(temp_input_path, temp_csv_path)
-                            st.write(f"Conversione di {uploaded_file.name} completata. Caricamento dati...")
-                            data = load_data(temp_csv_path)
-                        except Exception as e:
-                            st.error(f"Errore durante la conversione o il caricamento del file Excel {uploaded_file.name}: {e}")
-                            data = None
-                    else:
-                        st.error(f"Tipo di file non supportato: {uploaded_file.name} ({file_extension}). Salto.")
-                        data = None
-
-                    if data is not None and not data.empty:
-                        # Le colonne nel DataFrame 'data' mantengono i loro nomi originali dal file
-                        loaded_dfs[uploaded_file.name] = data
-                        st.success(f"File {uploaded_file.name} caricato e processato con successo. Colonne caricate: {list(data.columns)}")
-                    elif data is not None and data.empty:
-                         st.warning(f"Il file {uploaded_file.name} non contiene dati validi dopo l'elaborazione.")
-
-                except Exception as e:
-                    st.error(f"Errore generico durante l'elaborazione del file {uploaded_file.name}: {e}")
-
-
-        # Dopo aver processato tutti i file, combina i DataFrames
-        if loaded_dfs:
-            st.info("Combinazione dei dati caricati...")
-            try:
-                # Utilizza pd.concat e gestisci i nomi duplicati
-                combined_data = pd.concat(loaded_dfs.values(), axis=1, join='outer')
-
-                # Gestione nomi colonne duplicati dopo pd.concat
-                cols = pd.Series(combined_data.columns)
-                for dupl in combined_data.columns[combined_data.columns.duplicated(keep='first')].unique():
-                    dupl_cols_indices = [i for i, col in enumerate(combined_data.columns) if col == dupl]
-                    new_names = [f"{dupl}_{j+1}" for j in range(len(dupl_cols_indices))]
-                    for i, col_idx in enumerate(dupl_cols_indices):
-                        combined_data.columns.values[col_idx] = new_names[i]
-
-
-                # Assicurati che l'indice sia datetime
-                if not pd.api.types.is_datetime64_any_dtype(combined_data.index):
-                    # Questo blocco potrebbe non essere necessario se load_data ha successo, ma serve come fallback
-                    # Cerca di convertire l'indice, gestendo potenziali errori
+        with st.expander("Log Elaborazione", expanded=False):
+            st.info(f"Caricati {len(uploaded_files)} file. Elaborazione...")
+            with tempfile.TemporaryDirectory() as temp_dir:
+                for uploaded_file in uploaded_files:
                     try:
-                        combined_data.index = pd.to_datetime(combined_data.index)
+                        temp_input_path = os.path.join(temp_dir, uploaded_file.name)
+                        with open(temp_input_path, "wb") as f:
+                            f.write(uploaded_file.getvalue())
+
+                        file_extension = os.path.splitext(uploaded_file.name)[1].lower()
+                        data = None
+                        # file_identifier non sembra essere usato, lo rimuovo o lo lascio se serve debug
+                        
+                        if file_extension in [".csv", ".xls", ".xlsx"]:
+                            st.write(f"Processando file {file_extension}: {uploaded_file.name}")
+                            data = load_data(temp_input_path)
+                        else:
+                            st.error(f"Tipo di file non supportato: {uploaded_file.name} ({file_extension}). Salto.")
+                            data = None
+
+                        if data is not None and not data.empty:
+                            # Le colonne nel DataFrame 'data' mantengono i loro nomi originali dal file
+                            loaded_dfs[uploaded_file.name] = data
+                            st.success(f"File {uploaded_file.name} caricato e processato con successo. Colonne caricate: {list(data.columns)}")
+                        elif data is not None and data.empty:
+                            st.warning(f"Il file {uploaded_file.name} non contiene dati validi dopo l'elaborazione.")
+
                     except Exception as e:
-                        st.error(f"Errore nella conversione dell'indice a datetime: {e}")
-                        combined_data = None # Imposta a None se la conversione fallisce
+                        st.error(f"Errore generico durante l'elaborazione del file {uploaded_file.name}: {e}")
+    else:
+        # Logica per caricare il file di default se nessun file è stato caricato
+        default_file = "chart_default.csv"
+        if os.path.exists(default_file):
+            st.info("Nessun file caricato. Caricamento dati di esempio...")
+            try:
+                data = load_data(default_file)
+                if data is not None and not data.empty:
+                    loaded_dfs[default_file] = data
+                    # st.success(f"Dati di esempio caricati con successo.") 
+                else:
+                    st.warning("Il file di esempio non contiene dati validi.")
+            except Exception as e:
+                st.error(f"Errore nel caricamento del file di esempio: {e}")
+
+    # Dopo aver processato tutti i file (caricati o default), combina i DataFrames
+    if loaded_dfs:
+        # Se siamo nel caso di default (nessun upload), non mostriamo "Combinazione dati..." se c'è un solo file
+        if len(loaded_dfs) > 1 or uploaded_files:
+             st.info("Combinazione dei dati caricati...")
+        
+        try:
+            # Utilizza pd.concat e gestisci i nomi duplicati
+            combined_data = pd.concat(loaded_dfs.values(), axis=1, join='outer')
+
+            # Gestione nomi colonne duplicati dopo pd.concat
+            cols = pd.Series(combined_data.columns)
+            for dupl in combined_data.columns[combined_data.columns.duplicated(keep='first')].unique():
+                dupl_cols_indices = [i for i, col in enumerate(combined_data.columns) if col == dupl]
+                new_names = [f"{dupl}_{j+1}" for j in range(len(dupl_cols_indices))]
+                for i, col_idx in enumerate(dupl_cols_indices):
+                    combined_data.columns.values[col_idx] = new_names[i]
 
 
-                if combined_data is not None:
-                    # Ordina per indice temporale (utile dopo join='outer')
-                    combined_data.sort_index(inplace=True)
+            # Assicurati che l'indice sia datetime
+            if not pd.api.types.is_datetime64_any_dtype(combined_data.index):
+                # Questo blocco potrebbe non essere necessario se load_data ha successo, ma serve come fallback
+                # Cerca di convertire l'indice, gestendo potenziali errori
+                try:
+                    combined_data.index = pd.to_datetime(combined_data.index)
+                except Exception as e:
+                    st.error(f"Errore nella conversione dell'indice a datetime: {e}")
+                    combined_data = None # Imposta a None se la conversione fallisce
+
+
+            if combined_data is not None:
+                # Ordina per indice temporale (utile dopo join='outer')
+                combined_data.sort_index(inplace=True)
+                if uploaded_files: # Mostra info solo se utente ha caricato file, per non intasare la vista default
                     st.success("Dati combinati con successo.")
                     st.write("Anteprima dei dati combinati prima della pulizia:")
                     st.dataframe(combined_data.head())
 
-                    # --- INIZIO: Codice per la pulizia dei dati (rimozione date incomplete) ---
+                # --- INIZIO: Codice per la pulizia dei dati (rimozione date incomplete) ---
+                if uploaded_files:
                     st.info("Pulizia dati: rimozione date senza valori per tutti gli indici...")
-                    # Identifica le colonne che sono numeri - queste sono le probabili colonne degli indici
-                    # Usa .copy() per evitare SettingWithCopyWarning
-                    combined_data_cleaned = combined_data.copy()
-                    numeric_cols_before_cleaning = combined_data_cleaned.select_dtypes(include=np.number).columns.tolist()
+                
+                # Identifica le colonne che sono numeri - queste sono le probabili colonne degli indici
+                # Usa .copy() per evitare SettingWithCopyWarning
+                combined_data_cleaned = combined_data.copy()
+                numeric_cols_before_cleaning = combined_data_cleaned.select_dtypes(include=np.number).columns.tolist()
 
-                    if numeric_cols_before_cleaning:
-                         # Rimuovi righe (date) dove almeno una delle colonne numeriche ha un valore NaN
-                         # Questo mantiene solo le date per cui TUTTI gli indici numerici hanno un valore.
-                         initial_rows = combined_data_cleaned.shape[0]
-                         combined_data_cleaned.dropna(subset=numeric_cols_before_cleaning, inplace=True)
-                         rows_after_cleaning = combined_data_cleaned.shape[0]
+                if numeric_cols_before_cleaning:
+                    # Rimuovi righe (date) dove almeno una delle colonne numeriche ha un valore NaN
+                    # Questo mantiene solo le date per cui TUTTI gli indici numerici hanno un valore.
+                    initial_rows = combined_data_cleaned.shape[0]
+                    combined_data_cleaned.dropna(subset=numeric_cols_before_cleaning, inplace=True)
+                    rows_after_cleaning = combined_data_cleaned.shape[0]
 
-                         if combined_data_cleaned.empty:
-                             st.error("Dopo la pulizia dei dati, non ci sono date rimanenti con valori completi per tutti gli indici.")
-                             combined_data = None # Imposta combined_data originale a None
-                         else:
-                             dropped_rows_count = initial_rows - rows_after_cleaning
-                             if dropped_rows_count > 0:
-                                 st.warning(f"Rimosse {dropped_rows_count} righe (date) a causa di valori mancanti per alcuni indici.")
-                             st.success(f"Pulizia dati completata. Rimaste {combined_data_cleaned.shape[0]} date con dati completi per tutti gli indici numerici.")
-                             st.write("Anteprima dei dati puliti:")
-                             st.dataframe(combined_data_cleaned.head())
-                             combined_data = combined_data_cleaned # Aggiorna combined_data con il DataFrame pulito
+                    if combined_data_cleaned.empty:
+                        st.error("Dopo la pulizia dei dati, non ci sono date rimanenti con valori completi per tutti gli indici.")
+                        combined_data = None # Imposta combined_data originale a None
                     else:
+                        dropped_rows_count = initial_rows - rows_after_cleaning
+                        if dropped_rows_count > 0 and uploaded_files:
+                            st.warning(f"Rimosse {dropped_rows_count} righe (date) a causa di valori mancanti per alcuni indici.")
+                        
+                        if uploaded_files:
+                            st.success(f"Pulizia dati completata. Rimaste {combined_data_cleaned.shape[0]} date con dati completi per tutti gli indici numerici.")
+                            st.write("Anteprima dei dati puliti:")
+                            st.dataframe(combined_data_cleaned.head())
+                        
+                        combined_data = combined_data_cleaned # Aggiorna combined_data con il DataFrame pulito
+                else:
+                    if uploaded_files:
                         st.warning("Nessuna colonna numerica trovata per la pulizia dei dati.")
-                        # Se non ci sono colonne numeriche, prosegui con i dati non puliti numericamente,
-                        # ma combined_data è già stato assegnato e ordinato sopra.
+                    # Se non ci sono colonne numeriche, prosegui con i dati non puliti numericamente,
+                    # ma combined_data è già stato assegnato e ordinato sopra.
+                    if uploaded_files:
                         st.info("Proseguendo con i dati combinati senza pulizia specifica per colonne numeriche.")
 
 
-                    # --- FINE: Codice per la pulizia dei dati ---
+                # --- FINE: Codice per la pulizia dei dati ---
 
-            except Exception as e:
-                st.error(f"Errore durante la combinazione o la pulizia dei dati: {e}")
-                combined_data = None
-        else:
-            st.warning("Nessun file valido è stato caricato o processato con successo.")
+        except Exception as e:
+            st.error(f"Errore durante la combinazione o la pulizia dei dati: {e}")
             combined_data = None
+    else:
+        # st.warning("Nessun file valido è stato caricato o processato con successo.")
+        # Non serve warning qui se gestiamo il caso "nessun file" nell'else finale di main
+        combined_data = None
 
     # Il resto della logica di app.py procede solo se combined_data è stato creato con successo e non è vuoto
     if combined_data is not None and not combined_data.empty:
@@ -371,117 +387,118 @@ def main():
             actual_analysis_indices = analysis_data.columns.tolist() # Usa actual columns after filtering
 
             if not analysis_data.empty:
-                # Calcola rendimenti periodici (mensili) dai dati di prezzo/NAV per le metriche di rischio
-                st.info("Calcolo dei rendimenti periodici per metriche di rischio...")
-                returns_data = analysis_data.pct_change().dropna(how='all') # Rimuove righe completamente NaN
+                with st.expander("Dettagli Calcoli e Metriche", expanded=False):
+                    # Calcola rendimenti periodici (mensili) dai dati di prezzo/NAV per le metriche di rischio
+                    st.info("Calcolo dei rendimenti periodici per metriche di rischio...")
+                    returns_data = analysis_data.pct_change().dropna(how='all') # Rimuove righe completamente NaN
 
-                # Calcola le metriche di rischio per ogni asset sull'intero periodo
-                risk_metrics_results = {}
-                # Assumendo dati mensili, il fattore di annualizzazione per std dev è sqrt(12)
-                annualization_factor = math.sqrt(12)
+                    # Calcola le metriche di rischio per ogni asset sull'intero periodo
+                    risk_metrics_results = {}
+                    # Assumendo dati mensili, il fattore di annualizzazione per std dev è sqrt(12)
+                    annualization_factor = math.sqrt(12)
 
-                st.info("Calcolo delle metriche di rischio sull'intero periodo...")
-                if not returns_data.empty:
-                    for asset in actual_analysis_indices:
-                        # Assicurati che l'asset esista sia nei dati di prezzo che nei dati di rendimento
-                        if asset in analysis_data.columns and asset in returns_data.columns:
-                            asset_nav_series = analysis_data[asset].dropna() # Rimuove NaN iniziali per il calcolo del total return
-                            asset_returns_series = returns_data[asset].dropna() # Rimuove NaN iniziali per il calcolo delle std dev etc.
+                    st.info("Calcolo delle metriche di rischio sull'intero periodo...")
+                    if not returns_data.empty:
+                        for asset in actual_analysis_indices:
+                            # Assicurati che l'asset esista sia nei dati di prezzo che nei dati di rendimento
+                            if asset in analysis_data.columns and asset in returns_data.columns:
+                                asset_nav_series = analysis_data[asset].dropna() # Rimuove NaN iniziali per il calcolo del total return
+                                asset_returns_series = returns_data[asset].dropna() # Rimuove NaN iniziali per il calcolo delle std dev etc.
 
-                            # Allinea le serie sull'indice comune dopo la rimozione dei NaN
-                            common_index_metrics = asset_nav_series.index.intersection(asset_returns_series.index)
-                            aligned_nav_series = asset_nav_series.loc[common_index_metrics]
-                            aligned_returns_series = asset_returns_series.loc[common_index_metrics]
+                                # Allinea le serie sull'indice comune dopo la rimozione dei NaN
+                                common_index_metrics = asset_nav_series.index.intersection(asset_returns_series.index)
+                                aligned_nav_series = asset_nav_series.loc[common_index_metrics]
+                                aligned_returns_series = asset_returns_series.loc[common_index_metrics]
 
 
-                            if not aligned_returns_series.empty and not aligned_nav_series.empty and len(aligned_nav_series) > 1:
-                                try:
-                                    metrics_calculator = PortfolioRiskMetrics(
-                                        nav_series=aligned_nav_series,
-                                        returns_series=aligned_returns_series,
-                                        annualization_factor=annualization_factor,
-                                        risk_free_rate=period_risk_free_rate # Usa il tasso periodico
-                                    )
-                                    metrics = metrics_calculator.get_all_metrics()
-                                    for metric_name, value in metrics.items():
-                                        if metric_name not in risk_metrics_results:
-                                            risk_metrics_results[metric_name] = {}
-                                        risk_metrics_results[metric_name][asset] = value
+                                if not aligned_returns_series.empty and not aligned_nav_series.empty and len(aligned_nav_series) > 1:
+                                    try:
+                                        metrics_calculator = PortfolioRiskMetrics(
+                                            nav_series=aligned_nav_series,
+                                            returns_series=aligned_returns_series,
+                                            annualization_factor=annualization_factor,
+                                            risk_free_rate=period_risk_free_rate # Usa il tasso periodico
+                                        )
+                                        metrics = metrics_calculator.get_all_metrics()
+                                        for metric_name, value in metrics.items():
+                                            if metric_name not in risk_metrics_results:
+                                                risk_metrics_results[metric_name] = {}
+                                            risk_metrics_results[metric_name][asset] = value
 
-                                except ValueError as e:
-                                    st.warning(f"Impossibile calcolare metriche di rischio per {asset}: {e}")
-                                    # Inizializza con NaN se il calcolo fallisce
-                                    # Lista delle metriche attese da get_all_metrics per inizializzazione con NaN
-                                    expected_metrics_keys = list(METRIC_EXPLANATIONS.keys()) # Usa le chiavi del dizionario spiegazioni
-                                    for metric_name_key in expected_metrics_keys:
-                                         if metric_name_key not in risk_metrics_results:
-                                             risk_metrics_results[metric_name_key] = {}
-                                         risk_metrics_results[metric_name_key][asset] = np.nan
+                                    except ValueError as e:
+                                        st.warning(f"Impossibile calcolare metriche di rischio per {asset}: {e}")
+                                        # Inizializza con NaN se il calcolo fallisce
+                                        # Lista delle metriche attese da get_all_metrics per inizializzazione con NaN
+                                        expected_metrics_keys = list(METRIC_EXPLANATIONS.keys()) # Usa le chiavi del dizionario spiegazioni
+                                        for metric_name_key in expected_metrics_keys:
+                                             if metric_name_key not in risk_metrics_results:
+                                                 risk_metrics_results[metric_name_key] = {}
+                                             risk_metrics_results[metric_name_key][asset] = np.nan
 
-                                except Exception as e:
-                                    st.error(f"Errore durante il calcolo delle metriche per {asset}: {e}")
-                                    # Inizializza con NaN se il calcolo fallisce
+                                    except Exception as e:
+                                        st.error(f"Errore durante il calcolo delle metriche per {asset}: {e}")
+                                        # Inizializza con NaN se il calcolo fallisce
+                                        expected_metrics_keys = list(METRIC_EXPLANATIONS.keys())
+                                        for metric_name_key in expected_metrics_keys:
+                                             if metric_name_key not in risk_metrics_results:
+                                                 risk_metrics_results[metric_name_key] = {}
+                                             risk_metrics_results[metric_name_key][asset] = np.nan
+                                else:
+                                    st.warning(f"Serie di prezzi o rendimenti insufficiente per {asset} dopo la pulizia dei NaN ({len(aligned_nav_series)} punti dati validi). Impossibile calcolare metriche di rischio.")
+                                    # Inizializza con NaN se i dati sono insufficienti
                                     expected_metrics_keys = list(METRIC_EXPLANATIONS.keys())
                                     for metric_name_key in expected_metrics_keys:
                                          if metric_name_key not in risk_metrics_results:
                                              risk_metrics_results[metric_name_key] = {}
                                          risk_metrics_results[metric_name_key][asset] = np.nan
+
                             else:
-                                st.warning(f"Serie di prezzi o rendimenti insufficiente per {asset} dopo la pulizia dei NaN ({len(aligned_nav_series)} punti dati validi). Impossibile calcolare metriche di rischio.")
-                                # Inizializza con NaN se i dati sono insufficienti
+                                st.warning(f"Dati di prezzo o rendimenti mancanti per l'asset {asset}. Impossibile calcolare metriche di rischio.")
+                                # Inizializza con NaN se i dati sono mancanti
                                 expected_metrics_keys = list(METRIC_EXPLANATIONS.keys())
                                 for metric_name_key in expected_metrics_keys:
-                                     if metric_name_key not in risk_metrics_results:
-                                         risk_metrics_results[metric_name_key] = {}
-                                     risk_metrics_results[metric_name_key][asset] = np.nan
+                                    if metric_name_key not in risk_metrics_results:
+                                        risk_metrics_results[metric_name_key] = {}
+                                    risk_metrics_results[metric_name_key][asset] = np.nan
 
+
+                        # Convert the results dictionary into a DataFrame
+                        if risk_metrics_results:
+                            risk_metrics_df = pd.DataFrame(risk_metrics_results).T # Transpose to have Metrics as rows, Assets as columns
+                            # Optional: Reorder rows based on METRIC_EXPLANATIONS keys ordered_metric_names = list(METRIC_EXPLANATIONS.keys())
+                            ordered_metric_names = list(METRIC_EXPLANATIONS.keys())
+                            risk_metrics_df = risk_metrics_df.reindex(ordered_metric_names)
                         else:
-                            st.warning(f"Dati di prezzo o rendimenti mancanti per l'asset {asset}. Impossibile calcolare metriche di rischio.")
-                            # Inizializza con NaN se i dati sono mancanti
-                            expected_metrics_keys = list(METRIC_EXPLANATIONS.keys())
-                            for metric_name_key in expected_metrics_keys:
-                                if metric_name_key not in risk_metrics_results:
-                                    risk_metrics_results[metric_name_key] = {}
-                                risk_metrics_results[metric_name_key][asset] = np.nan
+                            risk_metrics_df = pd.DataFrame() # Empty DataFrame if no metrics were calculated
 
-
-                    # Convert the results dictionary into a DataFrame
-                    if risk_metrics_results:
-                        risk_metrics_df = pd.DataFrame(risk_metrics_results).T # Transpose to have Metrics as rows, Assets as columns
-                        # Optional: Reorder rows based on METRIC_EXPLANATIONS keys ordered_metric_names = list(METRIC_EXPLANATIONS.keys())
-                        ordered_metric_names = list(METRIC_EXPLANATIONS.keys())
-                        risk_metrics_df = risk_metrics_df.reindex(ordered_metric_names)
                     else:
-                        risk_metrics_df = pd.DataFrame() # Empty DataFrame if no metrics were calculated
+                        st.warning("Impossibile calcolare i rendimenti periodici per gli indici selezionati.")
+                        risk_metrics_df = pd.DataFrame() # Empty DataFrame if no returns data
 
-                else:
-                    st.warning("Impossibile calcolare i rendimenti periodici per gli indici selezionati.")
-                    risk_metrics_df = pd.DataFrame() # Empty DataFrame if no returns data
-
-                # Calcola i rendimenti rolling e i dati per l'analisi per finestre
-                # (solo se ci sono abbastanza dati per almeno un asset per il periodo rolling specificato)
-                st.info("Preparazione dati per Rendimenti Rolling e Analisi per Finestre...")
-                min_valid_data_points_rolling = rolling_years * 12 + 1 # Assuming monthly data
-                has_enough_data_rolling = any(analysis_data[col].dropna().shape[0] >= min_valid_data_points_rolling for col in analysis_data.columns)
+                    # Calcola i rendimenti rolling e i dati per l'analisi per finestre
+                    # (solo se ci sono abbastanza dati per almeno un asset per il periodo rolling specificato)
+                    st.info("Preparazione dati per Rendimenti Rolling e Analisi per Finestre...")
+                    min_valid_data_points_rolling = rolling_years * 12 + 1 # Assuming monthly data
+                    has_enough_data_rolling = any(analysis_data[col].dropna().shape[0] >= min_valid_data_points_rolling for col in analysis_data.columns)
 
 
-                rolling_returns = pd.DataFrame() # Initialize as empty
-                if has_enough_data_rolling:
-                     try:
-                         rolling_returns = calculate_rolling_returns(analysis_data, rolling_years)
-                     except Exception as e:
-                         st.error(f"Errore durante il calcolo dei rendimenti rolling: {e}")
-                         rolling_returns = pd.DataFrame() # Set to empty on error
-                else:
-                    st.warning(f"Non abbastanza dati per calcolare i rendimenti rolling di {rolling_years} anni per nessuno degli asset selezionati.")
+                    rolling_returns = pd.DataFrame() # Initialize as empty
+                    if has_enough_data_rolling:
+                         try:
+                             rolling_returns = calculate_rolling_returns(analysis_data, rolling_years)
+                         except Exception as e:
+                             st.error(f"Errore durante il calcolo dei rendimenti rolling: {e}")
+                             rolling_returns = pd.DataFrame() # Set to empty on error
+                    else:
+                        st.warning(f"Non abbastanza dati per calcolare i rendimenti rolling di {rolling_years} anni per nessuno degli asset selezionati.")
 
 
-                min_median_data = {} # Initialize as empty
-                try:
-                    min_median_data = calculate_min_median_by_window(analysis_data)
-                except Exception as e:
-                    st.error(f"Errore durante il calcolo min/median per finestre: {e}")
-                    min_median_data = {} # Set to empty on error
+                    min_median_data = {} # Initialize as empty
+                    try:
+                        min_median_data = calculate_min_median_by_window(analysis_data)
+                    except Exception as e:
+                        st.error(f"Errore durante il calcolo min/median per finestre: {e}")
+                        min_median_data = {} # Set to empty on error
 
                 # --- Aggiunge le schede di primo livello ---
                 tab_rolling, tab_windows, tab_risk_metrics = st.tabs([
@@ -588,11 +605,40 @@ def main():
                     st.subheader("Metriche di Rischio per l'intero Periodo Disponibile")
                     if not risk_metrics_df.empty:
                         # Visualizza la tabella delle metriche
-                        st.dataframe(risk_metrics_df.style.format({
-                            col: "{:.2f}%" if "(%)" in col or col == "Ulcer Index" or col == "Penalized Risk (%)" else "{:.2f}"
+                        # Definisci le metriche dove "Basso è Meglio" (Verde basso, Rosso alto)
+                        # SOLO metriche POSITIVE dove un valore assoluto più basso è preferibile.
+                        lower_is_better_metrics = [
+                            "Annualized Volatility (%)",
+                            "Ulcer Index",
+                            "Pitfall Indicator",
+                            "Penalized Risk (%)",
+                            "Downside Risk (%)",
+                            # Le metriche negative (Drawdown, VaR, CVaR, DaR, CDaR) maticamente:
+                            # -5 (Meglio) > -50 (Peggio).
+                            # Quindi usano la logica standard "Alto è Meglio" (RdYlGn), non questa lista.
+                        ]
+                        
+                        # Filtra le metriche presenti nel DataFrame
+                        lower_subset = [m for m in lower_is_better_metrics if m in risk_metrics_df.index]
+                        higher_subset = [m for m in risk_metrics_df.index if m not in lower_subset]
+
+                        # Crea lo Styler object
+                        styled_df = risk_metrics_df.style.format({
+                            col: "{:.2f}%" if "(%)" in col or "Ulcer Index" in str(col) or "Penalized Risk" in str(col) else "{:.2f}"
                             for col in risk_metrics_df.columns
-                        }))
-                        st.info(f"Metriche calcolate sull'intero periodo disponibile per ciascun asset. Fattore di annualizzazione per volatilità/rischi: {annualization_factor:.2f} (assumendo dati mensili). Tasso privo di rischio periodico: {period_risk_free_rate:.4f}.") # Mostra il tasso periodico usato
+                        })
+
+                        # Applica gradiente per "Lower is Better" (Verde=Basso, Rosso=Alto -> RdYlGn_r)
+                        if lower_subset:
+                            styled_df = styled_df.background_gradient(cmap='RdYlGn_r', axis=1, subset=pd.IndexSlice[lower_subset, :])
+
+                        # Applica gradiente per "Higher is Better" (Rosso=Basso, Verde=Alto -> RdYlGn)
+                        if higher_subset:
+                            styled_df = styled_df.background_gradient(cmap='RdYlGn', axis=1, subset=pd.IndexSlice[higher_subset, :])
+
+                        st.dataframe(styled_df)
+                        
+                        st.info("Metriche calcolate sull'intero periodo.")
 
                         # Aggiungi la sezione per le spiegazioni dettagliate con expander
                         st.markdown("---") # Linea separatrice

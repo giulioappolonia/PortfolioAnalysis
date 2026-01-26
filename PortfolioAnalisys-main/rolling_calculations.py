@@ -77,10 +77,10 @@ def calculate_risk_metrics(rolling_returns):
         'Dev. Std': rolling_returns.std(),
         'Skewness': rolling_returns.skew(),
         'Kurtosis': rolling_returns.kurt(),
-        '10째 percentile': rolling_returns.quantile(0.1),
-        '25째 percentile': rolling_returns.quantile(0.25),
-        '75째 percentile': rolling_returns.quantile(0.75),
-        '90째 percentile': rolling_returns.quantile(0.9)
+        '10° percentile': rolling_returns.quantile(0.1),
+        '25° percentile': rolling_returns.quantile(0.25),
+        '75° percentile': rolling_returns.quantile(0.75),
+        '90° percentile': rolling_returns.quantile(0.9)
     })
     return metrics
 
