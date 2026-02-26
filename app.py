@@ -12,6 +12,13 @@ import math # Needed for sqrt(12)
 
 # Dizionario contenente le spiegazioni dettagliate per ciascuna metrica.
 METRIC_EXPLANATIONS = {
+    # --- 1. Fondamenta (Metriche di Base) ---
+    "Total Return (%)": {
+        "Cos'è": "Guadagno complessivo cumulato dall'inizio alla fine.",
+        "Come viene calcolato": "(Valore Finale - Iniziale) / Iniziale.",
+        "Cosa indica": "Il risultato finale assoluto dell'investimento.",
+        "Meglio": "**Alto**.",
+    },
     "Annualized Return (%)": {
         "Cos'è": "Guadagno medio annuo composto dell'investimento.",
         "Come viene calcolato": "Rendimento totale proiettato su un anno standardizzato.",
@@ -30,6 +37,44 @@ METRIC_EXPLANATIONS = {
         "Cosa indica": "Il rischio massimo storico. Quanto avresti perso nel momento peggiore.",
         "Meglio": "**Basso (vicino a 0)**. Indica perdite massime contenute.",
     },
+    "Downside Risk (%)": {
+        "Cos'è": "Volatilità considerata solo quando i prezzi scendono.",
+        "Come viene calcolato": "Deviazione standard dei soli rendimenti negativi.",
+        "Cosa indica": "Il vero rischio di perdere denaro, ignorando la volatilità 'positiva' (rialzi).",
+        "Meglio": "**Basso**.",
+    },
+    "VaR_Returns(95%) (%)": { 
+        "Cos'è": "Value at Risk. Massima perdita periodica attesa nel 95% dei casi.",
+        "Come viene calcolato": "Quantile 5% dei rendimenti periodici.",
+        "Cosa indica": "Il rischio 'normale' di mercato su base periodica (es. mensile).",
+        "Meglio": "**Basso (vicino a 0)**.",
+    },
+    # --- 2. Efficienza Classica e Code ---
+    "Sharpe Ratio": {
+        "Cos'è": "Rendimento per unità di rischio totale (volatilità).",
+        "Come viene calcolato": "Rendimento / Volatilità.",
+        "Cosa indica": "Efficienza classica. Quanto 'paga' assumersi dei rischi standard.",
+        "Meglio": "**Alto**.",
+    },
+    "Sortino Ratio": {
+        "Cos'è": "Rendimento per unità di rischio 'cattivo' (perdite).",
+        "Come viene calcolato": "Rendimento / Downside Risk.",
+        "Cosa indica": "Efficienza nel generare profitti minimizzando solo le perdite (non le oscillazioni).",
+        "Meglio": "**Alto**.",
+    },
+    "Calmar Ratio": {
+        "Cos'è": "Rendimento rispetto al peggior crollo storico.",
+        "Come viene calcolato": "Rendimento / |Max Drawdown|.",
+        "Cosa indica": "Resilienza: capacità di recuperare e guadagnare dopo il peggior disastro.",
+        "Meglio": "**Alto**.",
+    },
+    "CVaR_Returns(95%) (%)": { 
+        "Cos'è": "Conditional VaR. Perdita media periodica negli scenari peggiori.",
+        "Come viene calcolato": "Media delle perdite che superano il VaR.",
+        "Cosa indica": "Quanto ci si aspetta di perdere quando le cose vanno molto male.",
+        "Meglio": "**Basso (vicino a 0)**.",
+    },
+    # --- 3. Analisi Avanzata dello Stress ---
     "Ulcer Index": {
         "Cos'è": "Misura lo stress dell'investitore combinando profondità e durata dei cali.",
         "Come viene calcolato": "Media quadratica di tutti i drawdown.",
@@ -54,6 +99,7 @@ METRIC_EXPLANATIONS = {
         "Cosa indica": "Il danno atteso durante un crollo di mercato grave ('Cigno Nero').",
         "Meglio": "**Basso (vicino a 0)**.",
     },
+    # --- 4. Alternative Portfolio Theory ---
     "Pitfall Indicator": {
         "Cos'è": "Indica quanto i crolli sono 'sorprendenti' rispetto alla normale volatilità.",
         "Come viene calcolato": "|CDaR| / Volatilità Annualizzata.",
@@ -71,48 +117,6 @@ METRIC_EXPLANATIONS = {
         "Come viene calcolato": "Rendimento Annualizzato / Penalized Risk.",
         "Cosa indica": "Generazione di rendimento con il minimo rischio totale (stress + eventi estremi).",
         "Meglio": "**Alto**.",
-    },
-     "Total Return (%)": {
-        "Cos'è": "Guadagno complessivo cumulato dall'inizio alla fine.",
-        "Come viene calcolato": "(Valore Finale - Iniziale) / Iniziale.",
-        "Cosa indica": "Il risultato finale assoluto dell'investimento.",
-        "Meglio": "**Alto**.",
-    },
-    "Downside Risk (%)": {
-        "Cos'è": "Volatilità considerata solo quando i prezzi scendono.",
-        "Come viene calcolato": "Deviazione standard dei soli rendimenti negativi.",
-        "Cosa indica": "Il vero rischio di perdere denaro, ignorando la volatilità 'positiva' (rialzi).",
-        "Meglio": "**Basso**.",
-    },
-    "Sharpe Ratio": {
-        "Cos'è": "Rendimento per unità di rischio totale (volatilità).",
-        "Come viene calcolato": "Rendimento / Volatilità.",
-        "Cosa indica": "Efficienza classica. Quanto 'paga' assumersi dei rischi standard.",
-        "Meglio": "**Alto**.",
-    },
-    "Sortino Ratio": {
-        "Cos'è": "Rendimento per unità di rischio 'cattivo' (perdite).",
-        "Come viene calcolato": "Rendimento / Downside Risk.",
-        "Cosa indica": "Efficienza nel generare profitti minimizzando solo le perdite (non le oscillazioni).",
-        "Meglio": "**Alto**.",
-    },
-    "Calmar Ratio": {
-        "Cos'è": "Rendimento rispetto al peggior crollo storico.",
-        "Come viene calcolato": "Rendimento / |Max Drawdown|.",
-        "Cosa indica": "Resilienza: capacità di recuperare e guadagnare dopo il peggior disastro.",
-        "Meglio": "**Alto**.",
-    },
-     "VaR_Returns(95%) (%)": { 
-        "Cos'è": "Value at Risk. Massima perdita periodica attesa nel 95% dei casi.",
-        "Come viene calcolato": "Quantile 5% dei rendimenti periodici.",
-        "Cosa indica": "Il rischio 'normale' di mercato su base periodica (es. mensile).",
-        "Meglio": "**Basso (vicino a 0)**.",
-    },
-    "CVaR_Returns(95%) (%)": { 
-        "Cos'è": "Conditional VaR. Perdita media periodica negli scenari peggiori.",
-        "Come viene calcolato": "Media delle perdite che superano il VaR.",
-        "Cosa indica": "Quanto ci si aspetta di perdere quando le cose vanno molto male.",
-        "Meglio": "**Basso (vicino a 0)**.",
     },
 }
 
@@ -523,17 +527,17 @@ def main():
                         # Plot Rendimenti Rolling Annualizzati
                         st.subheader("Rendimenti Rolling Annualizzati")
                         fig_returns = plot_rolling_returns(rolling_returns, title=f"Rendimenti Rolling ({rolling_years} anni)")
-                        st.plotly_chart(fig_returns, use_container_width=True)
+                        st.plotly_chart(fig_returns, width='stretch')
 
                         # Box Plot e Violin Plot
                         st.subheader("Distribuzione dei Rendimenti Rolling")
                         tab_box, tab_violin = st.tabs(["Box Plot", "Violin Plot"])
                         with tab_box:
                             fig_box = plot_boxplot(rolling_returns, title=f"Box Plot ({rolling_years} anni)")
-                            st.plotly_chart(fig_box, use_container_width=True)
+                            st.plotly_chart(fig_box, width='stretch')
                         with tab_violin:
                             fig_violin = plot_violinplot(rolling_returns, title=f"Violin Plot ({rolling_years} anni)")
-                            st.plotly_chart(fig_violin, use_container_width=True)
+                            st.plotly_chart(fig_violin, width='stretch')
                     else:
                         st.warning("Nessun dato valido per l'analisi dei Rendimenti Rolling con le opzioni selezionate o dati insufficienti.")
 
@@ -556,7 +560,7 @@ def main():
                              assets_with_data = [asset for asset, data in min_median_data.items() if data and 'windows' in data and data['windows']]
                              if assets_with_data:
                                 fig_min = plot_min_vs_window(min_median_data, assets=assets_with_data, title="Rendimento Minimo vs Finestra Temporale")
-                                st.plotly_chart(fig_min, use_container_width=True)
+                                st.plotly_chart(fig_min, width='stretch')
                              else:
                                 st.warning("Nessun dato disponibile per il grafico Rendimento Minimo vs Finestra Temporale con le finestre selezionate.")
 
@@ -564,7 +568,7 @@ def main():
                              assets_with_data = [asset for asset, data in min_median_data.items() if data and 'windows' in data and data['windows']]
                              if assets_with_data:
                                 fig_median = plot_median_vs_window(min_median_data, assets=assets_with_data, title="Rendimento Mediano vs Finestra Temporale")
-                                st.plotly_chart(fig_median, use_container_width=True)
+                                st.plotly_chart(fig_median, width='stretch')
                              else:
                                 st.warning("Nessun dato disponibile per il grafico Rendimento Mediano vs Finestra Temporale con le finestre selezionate.")
 
@@ -572,7 +576,7 @@ def main():
                              assets_with_data = [asset for asset, data in min_median_data.items() if data and 'windows' in data and data['windows']]
                              if assets_with_data:
                                 fig_combined = plot_combined_min_median(min_median_data, assets=assets_with_data, title="Rendimenti Minimo e Mediano vs Finestra Temporale - Tutti gli Asset")
-                                st.plotly_chart(fig_combined, use_container_width=True)
+                                st.plotly_chart(fig_combined, width='stretch')
                              else:
                                 st.warning("Nessun dato disponibile per il grafico Rendimenti Minimo e Mediano Combinato.")
 
@@ -591,7 +595,7 @@ def main():
                                 # Filtra min_median_data per includere solo gli asset selezionati
                                 filtered_min_median_data = {asset: min_median_data[asset] for asset in detailed_selected_assets if asset in min_median_data}
                                 fig_detailed = plot_detailed_window_analysis(filtered_min_median_data, detailed_selected_assets, title="Analisi Dettagliata per Finestra Temporale con Box Plot")
-                                st.plotly_chart(fig_detailed, use_container_width=True)
+                                st.plotly_chart(fig_detailed, width='stretch')
                             elif detailed_selected_assets:
                                 st.warning("Impossibile creare l'analisi dettagliata. I dati per l'asset/gli asset selezionati non sono disponibili per tutte le finestre.")
                             else:
@@ -600,57 +604,94 @@ def main():
                         st.warning("Impossibile calcolare l'andamento per diverse finestre temporali con i dati disponibili.")
 
 
-                # --- Contenuto per la scheda "Metriche di Rischio" (NUOVA) ---
                 with tab_risk_metrics:
                     st.subheader("Metriche di Rischio per l'intero Periodo Disponibile")
+                    
+                    st.markdown("""
+                    Benvenuto nella sezione delle **Metriche di Rischio**. Per aiutarti a navigare tra questi indicatori, li abbiamo organizzati seguendo un percorso logico-matematico che va dalle basi fondamentali alla sintesi finale:
+
+                    1. **Fondamenta (Metriche di Base)**  
+                    Queste metriche sono calcolate direttamente dai prezzi o dai rendimenti periodici, senza dipendere da altri indicatori di rischio.
+                    * **Total Return (%)**: Il guadagno assoluto. Indica il risultato finale assoluto dell'investimento.
+                    * **Annualized Return (%)**: La base per tutti i rapporti di efficienza. Indica la velocità media di crescita del capitale.
+                    * **Annualized Volatility (%)**: La misura di rischio standard (usata poi per Sharpe e Pitfall). Indica incertezza e instabilità; alta volatilità significa forti sbalzi di prezzo.
+                    * **Max Drawdown (%)**: Il calo massimo storico (fondamento per il Calmar). Indica il rischio massimo storico; quanto avresti perso nel momento peggiore.
+                    * **Downside Risk (%)**: Volatilità focalizzata solo sulle perdite (fondamento per il Sortino). Indica il vero rischio di perdere denaro, ignorando la volatilità "positiva" (rialzi).
+                    * **VaR_Returns(95%) (%)**: La soglia di perdita "normale" nel periodo. Indica il rischio "normale" di mercato su base periodica (es. mensile).
+
+                    2. **Efficienza Classica e Code (Primo Livello di Derivazione)**  
+                    Indicatori che mettono in relazione il rendimento con una singola metrica di base o approfondiscono la statistica delle code.
+                    * **Sharpe Ratio**: Relazione Rendimento / Volatilità. Indica l'efficienza classica: quanto "paga" assumersi dei rischi standard.
+                    * **Sortino Ratio**: Relazione Rendimento / Downside Risk. Indica l'efficienza nel generare profitti minimizzando solo le perdite (non le oscillazioni).
+                    * **Calmar Ratio**: Relazione Rendimento / Max Drawdown. Indica la resilienza: capacità di recuperare e guadagnare dopo il peggior disastro.
+                    * **CVaR_Returns(95%) (%)**: Approfondimento del VaR (media delle perdite oltre la soglia). Indica quanto ci si aspetta di perdere quando le cose vanno molto male.
+
+                    3. **Analisi Avanzata dello Stress (Il sistema Ulcer e DaR)**  
+                    Metriche che analizzano l'intera distribuzione dei cali (drawdown) anziché solo il punto peggiore.
+                    * **Ulcer Index**: Calcolato sull'intero storico dei drawdown (fondamento per UPI e Penalized Risk). Indica la "quantità di dolore" sofferta; penalizza periodi lunghi e profondi di perdita.
+                    * **Ulcer Performance Index**: Relazione Rendimento / Ulcer Index. Indica l'efficienza nel generare profitti minimizzando la sofferenza dei cali.
+                    * **DaR(95%) (%)**: Soglia di rischio sui drawdown (fondamento per CDaR). Indica quanto potresti perdere in una situazione di mercato negativa ma non estrema.
+                    * **CDaR(95%) (%)**: Media dei drawdown oltre la soglia DaR (fondamento per il Pitfall). Indica il danno atteso durante un crollo di mercato grave ("Cigno Nero").
+
+                    4. **Alternative Portfolio Theory (Sintesi Finale)**  
+                    Il culmine del percorso, dove le metriche precedenti vengono combinate per definire il rischio "totale" (durata, profondità e sorpresa).
+                    * **Pitfall Indicator**: Mette in relazione la gravità dei crolli (CDaR) con la Volatilità standard. Se alto, indica un rischio nascosto: l'asset sembra tranquillo ma ha crolli improvvisi e violenti.
+                    * **Penalized Risk (%)**: Sintesi matematica tra lo stress continuo (Ulcer Index) e gli eventi estremi (Pitfall Indicator). Fornisce una visione completa del rischio: quanto a lungo perdi e quanto violentemente.
+                    * **Serenity Ratio**: Il risultato finale. Indica la generazione di rendimento con il minimo rischio totale (stress + eventi estremi).
+                    """)
+
                     if not risk_metrics_df.empty:
-                        # Visualizza la tabella delle metriche
-                        # Definisci le metriche dove "Basso è Meglio" (Verde basso, Rosso alto)
-                        # SOLO metriche POSITIVE dove un valore assoluto più basso è preferibile.
+                        # TRASPOSIZIONE: Metriche sulle COLONNE, Asset sulle RIGHE
+                        df_to_display = risk_metrics_df.T
+
+                        # Prepara la configurazione delle colonne con i Tooltip
+                        column_configs = {}
+                        for metric_name, info in METRIC_EXPLANATIONS.items():
+                            if metric_name in df_to_display.columns:
+                                # Crea il testo del tooltip combinando Cos'è e Cosa Indica
+                                tooltip_text = f"**Cos'è:** {info.get('Cos\'è', '')}\n\n**Indica:** {info.get('Cosa indica', '')}"
+                                
+                                # Formattazione automatica basata sul nome della metrica
+                                is_percent = "(%)" in metric_name or "Ulcer Index" in metric_name or "Penalized Risk" in metric_name
+                                format_str = "%.2f%%" if is_percent else "%.2f"
+                                
+                                column_configs[metric_name] = st.column_config.NumberColumn(
+                                    metric_name,
+                                    help=tooltip_text,
+                                    format=format_str
+                                )
+
+                        # Definisci le metriche dove "Basso è Meglio" (per il gradiente)
                         lower_is_better_metrics = [
                             "Annualized Volatility (%)",
                             "Ulcer Index",
                             "Pitfall Indicator",
                             "Penalized Risk (%)",
                             "Downside Risk (%)",
-                            # Le metriche negative (Drawdown, VaR, CVaR, DaR, CDaR) maticamente:
-                            # -5 (Meglio) > -50 (Peggio).
-                            # Quindi usano la logica standard "Alto è Meglio" (RdYlGn), non questa lista.
                         ]
                         
-                        # Filtra le metriche presenti nel DataFrame
-                        lower_subset = [m for m in lower_is_better_metrics if m in risk_metrics_df.index]
-                        higher_subset = [m for m in risk_metrics_df.index if m not in lower_subset]
+                        # Filtra le metriche presenti
+                        lower_cols = [m for m in lower_is_better_metrics if m in df_to_display.columns]
+                        higher_cols = [m for m in df_to_display.columns if m not in lower_cols]
 
-                        # Crea lo Styler object
-                        styled_df = risk_metrics_df.style.format({
-                            col: "{:.2f}%" if "(%)" in col or "Ulcer Index" in str(col) or "Penalized Risk" in str(col) else "{:.2f}"
-                            for col in risk_metrics_df.columns
-                        })
-
-                        # Applica gradiente per "Lower is Better" (Verde=Basso, Rosso=Alto -> RdYlGn_r)
-                        if lower_subset:
-                            styled_df = styled_df.background_gradient(cmap='RdYlGn_r', axis=1, subset=pd.IndexSlice[lower_subset, :])
-
-                        # Applica gradiente per "Higher is Better" (Rosso=Basso, Verde=Alto -> RdYlGn)
-                        if higher_subset:
-                            styled_df = styled_df.background_gradient(cmap='RdYlGn', axis=1, subset=pd.IndexSlice[higher_subset, :])
-
-                        st.dataframe(styled_df)
+                        # Applica lo styling
+                        styled_df = df_to_display.style
                         
-                        st.info("Metriche calcolate sull'intero periodo.")
+                        # Gradiente: asse 0 (confronta gli asset per ogni metrica/colonna)
+                        if lower_cols:
+                            styled_df = styled_df.background_gradient(cmap='RdYlGn_r', axis=0, subset=lower_cols)
 
-                        # Aggiungi la sezione per le spiegazioni dettagliate con expander
-                        st.markdown("---") # Linea separatrice
-                        st.subheader("Spiegazione Dettagliata delle Metriche")
+                        if higher_cols:
+                            styled_df = styled_df.background_gradient(cmap='RdYlGn', axis=0, subset=higher_cols)
 
-                        # Itera sulle metriche definite nel dizionario delle spiegazioni e usa st.expander
-                        for metric_name, explanation_details in METRIC_EXPLANATIONS.items():
-                            # Usa st.expander per creare il menu a tendina per ogni metrica
-                            with st.expander(f"**{metric_name}**"): # Il titolo dell'expander sarà il nome della metrica
-                                for section_title, content in explanation_details.items():
-                                    # Utilizza markdown per formattare le sezioni (Cos'è, Come, ecc.) all'interno dell'expander
-                                    st.markdown(f"**{section_title}:** {content}")
+                        # Visualizza la tabella
+                        st.dataframe(
+                            styled_df,
+                            column_config=column_configs,
+                            width='stretch'
+                        )
+                        
+                        st.info("💡 Passa il mouse sopra il nome di una metrica nell'intestazione per visualizzarne la spiegazione.")
 
                     else:
                          st.warning("Nessuna metrica di rischio calcolata per gli indici selezionati. Assicurati che i dati caricati contengano abbastanza punti e che gli indici siano stati selezionati correttamente.")

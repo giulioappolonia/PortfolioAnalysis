@@ -1,0 +1,132 @@
+# Backup: Spiegazione Dettagliata delle Metriche
+
+In questo file sono salvate le informazioni della sezione "Spiegazione Dettagliata delle Metriche" e il relativo codice Streamlit per un eventuale ripristino.
+
+## Dizionario METRIC_EXPLANATIONS
+
+```python
+METRIC_EXPLANATIONS = {
+    # --- 1. Fondamenta (Metriche di Base) ---
+    "Total Return (%)": {
+        "Cos'è": "Guadagno complessivo cumulato dall'inizio alla fine.",
+        "Come viene calcolato": "(Valore Finale - Iniziale) / Iniziale.",
+        "Cosa indica": "Il risultato finale assoluto dell'investimento.",
+        "Meglio": "**Alto**.",
+    },
+    "Annualized Return (%)": {
+        "Cos'è": "Guadagno medio annuo composto dell'investimento.",
+        "Come viene calcolato": "Rendimento totale proiettato su un anno standardizzato.",
+        "Cosa indica": "La velocità media di crescita del capitale.",
+        "Meglio": "**Alto**. Più è alto, maggiore è il profitto.",
+    },
+    "Annualized Volatility (%)": {
+        "Cos'è": "Misura di quanto il prezzo oscilla attorno alla media.",
+        "Come viene calcolato": "Deviazione standard dei rendimenti annualizzata.",
+        "Cosa indica": "Incertezza e instabilità. Alta volatilità significa forti sbalzi di prezzo.",
+        "Meglio": "**Basso**. Indica un andamento più stabile e prevedibile.",
+    },
+    "Max Drawdown (%)": {
+        "Cos'è": "La peggiore perdita percentuale registrata dai massimi storici.",
+        "Come viene calcolato": "Massimo calo dal picco precedente al minimo successivo.",
+        "Cosa indica": "Il rischio massimo storico. Quanto avresti perso nel momento peggiore.",
+        "Meglio": "**Basso (vicino a 0)**. Indica perdite massime contenute.",
+    },
+    "Downside Risk (%)": {
+        "Cos'è": "Volatilità considerata solo quando i prezzi scendono.",
+        "Come viene calcolato": "Deviazione standard dei soli rendimenti negativi.",
+        "Cosa indica": "Il vero rischio di perdere denaro, ignorando la volatilità 'positiva' (rialzi).",
+        "Meglio": "**Basso**.",
+    },
+    "VaR_Returns(95%) (%)": { 
+        "Cos'è": "Value at Risk. Massima perdita periodica attesa nel 95% dei casi.",
+        "Come viene calcolato": "Quantile 5% dei rendimenti periodici.",
+        "Cosa indica": "Il rischio 'normale' di mercato su base periodica (es. mensile).",
+        "Meglio": "**Basso (vicino a 0)**.",
+    },
+    # --- 2. Efficienza Classica e Code ---
+    "Sharpe Ratio": {
+        "Cos'è": "Rendimento per unità di rischio totale (volatilità).",
+        "Come viene calcolato": "Rendimento / Volatilità.",
+        "Cosa indica": "Efficienza classica. Quanto 'paga' assumersi dei rischi standard.",
+        "Meglio": "**Alto**.",
+    },
+    "Sortino Ratio": {
+        "Cos'è": "Rendimento per unità di rischio 'cattivo' (perdite).",
+        "Come viene calcolato": "Rendimento / Downside Risk.",
+        "Cosa indica": "Efficienza nel generare profitti minimizzando solo le perdite (non le oscillazioni).",
+        "Meglio": "**Alto**.",
+    },
+    "Calmar Ratio": {
+        "Cos'è": "Rendimento rispetto al peggior crollo storico.",
+        "Come viene calcolato": "Rendimento / |Max Drawdown|.",
+        "Cosa indica": "Resilienza: capacità di recuperare e guadagnare dopo il peggior disastro.",
+        "Meglio": "**Alto**.",
+    },
+    "CVaR_Returns(95%) (%)": { 
+        "Cos'è": "Conditional VaR. Perdita media periodica negli scenari peggiori.",
+        "Come viene calcolato": "Media delle perdite che superano il VaR.",
+        "Cosa indica": "Quanto ci si aspetta di perdere quando le cose vanno molto male.",
+        "Meglio": "**Basso (vicino a 0)**.",
+    },
+    # --- 3. Analisi Avanzata dello Stress ---
+    "Ulcer Index": {
+        "Cos'è": "Misura lo stress dell'investitore combinando profondità e durata dei cali.",
+        "Come viene calcolato": "Media quadratica di tutti i drawdown.",
+        "Cosa indica": "La 'quantità di dolore' sofferta. Penalizza periodi lunghi e profondi di perdita.",
+        "Meglio": "**Basso**. Indica cali brevi e poco profondi.",
+    },
+    "Ulcer Performance Index": {
+        "Cos'è": "Rendimento ottenuto per ogni unità di 'stress' (Ulcer Index).",
+        "Come viene calcolato": "Rendimento Annualizzato / Ulcer Index.",
+        "Cosa indica": "Efficienza nel generare profitti minimizzando la sofferenza dei cali.",
+        "Meglio": "**Alto**. Indica ottimi ritorni con poco stress.",
+    },
+    "DaR(95%) (%)": { 
+        "Cos'è": "Drawdown at Risk. La perdita che non dovrebbe essere superata nel 95% dei casi peggiori.",
+        "Come viene calcolato": "Soglia del 5% peggiore dei drawdown storici.",
+        "Cosa indica": "Quanto potresti perdere in una situazione di mercato negativa ma non estrema.",
+        "Meglio": "**Basso (vicino a 0)**.",
+    },
+    "CDaR(95%) (%)": { 
+        "Cos'è": "Conditional DaR. La perdita media che si verifica negli scenari estremi (oltre il DaR).",
+        "Come viene calcolato": "Media dei drawdown peggiori del 5%.",
+        "Cosa indica": "Il danno atteso durante un crollo di mercato grave ('Cigno Nero').",
+        "Meglio": "**Basso (vicino a 0)**.",
+    },
+    # --- 4. Alternative Portfolio Theory ---
+    "Pitfall Indicator": {
+        "Cos'è": "Indica quanto i crolli sono 'sorprendenti' rispetto alla normale volatilità.",
+        "Come viene calcolato": "|CDaR| / Volatilità Annualizzata.",
+        "Cosa indica": "Rischio nascosto. Se alto, l'asset sembra tranquillo ma ha crolli improvvisi e violenti.",
+        "Meglio": "**Basso**. Indica che i crolli sono proporzionati alla volatilità.",
+    },
+    "Penalized Risk (%)": {
+        "Cos'è": "Rischio totale che pesa sia la durata dei cali (Ulcer) che la loro violenza estrema (Pitfall).",
+        "Come viene calcolato": "Ulcer Index * Pitfall Indicator.",
+        "Cosa indica": "Una visione completa del rischio: quanto a lungo perdi e quanto violentemente.",
+        "Meglio": "**Basso**.",
+    },
+    "Serenity Ratio": {
+        "Cos'è": "La metrica definitiva di efficienza nella teoria alternativa.",
+        "Come viene calcolato": "Rendimento Annualizzato / Penalized Risk.",
+        "Cosa indica": "Generazione di rendimento con il minimo rischio totale (stress + eventi estremi).",
+        "Meglio": "**Alto**.",
+    },
+}
+```
+
+## Codice UI (Streamlit)
+
+```python
+# Aggiungi la sezione per le spiegazioni dettagliate con expander
+st.markdown("---") # Linea separatrice
+st.subheader("Spiegazione Dettagliata delle Metriche")
+
+# Itera sulle metriche definite nel dizionario delle spiegazioni e usa st.expander
+for metric_name, explanation_details in METRIC_EXPLANATIONS.items():
+    # Usa st.expander per creare il menu a tendina per ogni metrica
+    with st.expander(f"**{metric_name}**"): # Il titolo dell'expander sarà il nome della metrica
+        for section_title, content in explanation_details.items():
+            # Utilizza markdown per formattare le sezioni (Cos'è, Come, ecc.) all'interno dell'expander
+            st.markdown(f"**{section_title}:** {content}")
+```

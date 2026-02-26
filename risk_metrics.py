@@ -436,30 +436,34 @@ class PortfolioRiskMetrics:
         metrics["Serenity Ratio"] = serenity_ratio_val # Ratio decimale
 
 
-        # Ordine basato sull'immagine nel PDF + altre metriche calcolate + UPI
+        # Ordine basato sulla razionale logico-matematica proposta:
+        # 1. Fondamenta -> 2. Efficienza Classica/Code -> 3. Stress Avanzato -> 4. Sintesi (Alternative Theory)
         ordered_metrics = {}
 
-        # Metriche principali come nell'immagine del PDF, con UPI inserito
+        # --- 1. Fondamenta (Metriche di Base) ---
+        if "Total Return (%)" in metrics: ordered_metrics["Total Return (%)"] = metrics["Total Return (%)"]
         if "Annualized Return (%)" in metrics: ordered_metrics["Annualized Return (%)"] = metrics["Annualized Return (%)"]
         if "Annualized Volatility (%)" in metrics: ordered_metrics["Annualized Volatility (%)"] = metrics["Annualized Volatility (%)"]
         if "Max Drawdown (%)" in metrics: ordered_metrics["Max Drawdown (%)"] = metrics["Max Drawdown (%)"]
-        if "Ulcer Index" in metrics: ordered_metrics["Ulcer Index"] = metrics["Ulcer Index"]
-        if "Ulcer Performance Index" in metrics: ordered_metrics["Ulcer Performance Index"] = metrics["Ulcer Performance Index"] # <-- UPI aggiunto qui
-        if f"DaR({(1-alpha_tail)*100:.0f}%) (%)" in metrics: ordered_metrics[f"DaR({(1-alpha_tail)*100:.0f}%) (%)"] = metrics[f"DaR({(1-alpha_tail)*100:.0f}%) (%)"]
-        if f"CDaR({(1-alpha_tail)*100:.0f}%) (%)" in metrics: ordered_metrics[f"CDaR({(1-alpha_tail)*100:.0f}%) (%)"] = metrics[f"CDaR({(1-alpha_tail)*100:.0f}%) (%)"]
-        if "Pitfall Indicator" in metrics: ordered_metrics["Pitfall Indicator"] = metrics["Pitfall Indicator"]
-        if "Penalized Risk (%)" in metrics: ordered_metrics["Penalized Risk (%)"] = metrics["Penalized Risk (%)"]
-        if "Serenity Ratio" in metrics: ordered_metrics["Serenity Ratio"] = metrics["Serenity Ratio"]
-
-        # Altre metriche calcolate (ordine come prima)
-        if "Total Return (%)" in metrics: ordered_metrics["Total Return (%)"] = metrics["Total Return (%)"]
         if "Downside Risk (%)" in metrics: ordered_metrics["Downside Risk (%)"] = metrics["Downside Risk (%)"]
+        if f"VaR_Returns({(1-alpha_tail)*100:.0f}%) (%)" in metrics: ordered_metrics[f"VaR_Returns({(1-alpha_tail)*100:.0f}%) (%)"] = metrics[f"VaR_Returns({(1-alpha_tail)*100:.0f}%) (%)"]
+
+        # --- 2. Efficienza Classica e Code ---
         if "Sharpe Ratio" in metrics: ordered_metrics["Sharpe Ratio"] = metrics["Sharpe Ratio"]
         if "Sortino Ratio" in metrics: ordered_metrics["Sortino Ratio"] = metrics["Sortino Ratio"]
         if "Calmar Ratio" in metrics: ordered_metrics["Calmar Ratio"] = metrics["Calmar Ratio"]
-         # VaR/CVaR sui rendimenti per distinguerli da DaR/CDaR
-        if f"VaR_Returns({(1-alpha_tail)*100:.0f}%) (%)" in metrics: ordered_metrics[f"VaR_Returns({(1-alpha_tail)*100:.0f}%) (%)"] = metrics[f"VaR_Returns({(1-alpha_tail)*100:.0f}%) (%)"]
         if f"CVaR_Returns({(1-alpha_tail)*100:.0f}%) (%)" in metrics: ordered_metrics[f"CVaR_Returns({(1-alpha_tail)*100:.0f}%) (%)"] = metrics[f"CVaR_Returns({(1-alpha_tail)*100:.0f}%) (%)"]
+
+        # --- 3. Analisi Avanzata dello Stress ---
+        if "Ulcer Index" in metrics: ordered_metrics["Ulcer Index"] = metrics["Ulcer Index"]
+        if "Ulcer Performance Index" in metrics: ordered_metrics["Ulcer Performance Index"] = metrics["Ulcer Performance Index"]
+        if f"DaR({(1-alpha_tail)*100:.0f}%) (%)" in metrics: ordered_metrics[f"DaR({(1-alpha_tail)*100:.0f}%) (%)"] = metrics[f"DaR({(1-alpha_tail)*100:.0f}%) (%)"]
+        if f"CDaR({(1-alpha_tail)*100:.0f}%) (%)" in metrics: ordered_metrics[f"CDaR({(1-alpha_tail)*100:.0f}%) (%)"] = metrics[f"CDaR({(1-alpha_tail)*100:.0f}%) (%)"]
+
+        # --- 4. Alternative Portfolio Theory ---
+        if "Pitfall Indicator" in metrics: ordered_metrics["Pitfall Indicator"] = metrics["Pitfall Indicator"]
+        if "Penalized Risk (%)" in metrics: ordered_metrics["Penalized Risk (%)"] = metrics["Penalized Risk (%)"]
+        if "Serenity Ratio" in metrics: ordered_metrics["Serenity Ratio"] = metrics["Serenity Ratio"]
 
 
         return ordered_metrics
