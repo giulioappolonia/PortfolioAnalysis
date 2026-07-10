@@ -5,3 +5,7 @@ plotly
 scipy
 openpyxl
 matplotlib
+statsmodels
+yfinance
+pandas-datareader
+requests

@@ -130,6 +130,25 @@ Seleziona le opzioni dalla barra laterale e carica uno o più file **CSV o Excel
 with st.sidebar:
     st.header("Opzioni")
     uploaded_files = st.file_uploader("Carica uno o più file CSV o Excel", type=["csv", "xls", "xlsx"], accept_multiple_files=True)
+    
+    st.markdown("---")
+    st.markdown("### Configurazione Valute")
+    reg_input_currency = st.selectbox(
+        "Valuta Dati in Input",
+        options=["EUR", "USD"],
+        index=0,
+        key="reg_input_currency",
+        help="Seleziona la valuta in cui sono denominati i dati dell'asset in input."
+    )
+    reg_display_currency = st.selectbox(
+        "Valuta di Visualizzazione",
+        options=["EUR", "USD"],
+        index=0,
+        key="reg_display_currency",
+        help="Seleziona la valuta in cui visualizzare i rendimenti effettivi, stimati e la scomposizione della performance."
+    )
+    st.markdown("---")
+    
     analysis_mode = st.radio("Modalità di analisi", ["Confronto Completo", "Indice Singolo", "Confronto Indici", "Portafoglio"], index=0)
     rolling_years = st.slider("Periodo Rolling (anni)", min_value=1, max_value=20, value=3, step=1)
 
@@ -505,10 +524,11 @@ def main():
                         min_median_data = {} # Set to empty on error
 
                 # --- Aggiunge le schede di primo livello ---
-                tab_rolling, tab_windows, tab_risk_metrics = st.tabs([
+                tab_rolling, tab_windows, tab_risk_metrics, tab_factors = st.tabs([
                     "Rendimenti Rolling & Distribuzioni",
                     "Andamento per Finestre",
-                    "Metriche di Rischio" # Nuova scheda
+                    "Metriche di Rischio",
+                    "Regressione Fattoriale"
                 ])
 
                 # --- Contenuto per la scheda "Rendimenti Rolling & Distribuzioni" ---
@@ -695,6 +715,432 @@ def main():
 
                     else:
                          st.warning("Nessuna metrica di rischio calcolata per gli indici selezionati. Assicurati che i dati caricati contengano abbastanza punti e che gli indici siano stati selezionati correttamente.")
+
+                # --- Contenuto per la scheda "Regressione Fattoriale" ---
+                with tab_factors:
+                    st.subheader("Analisi di Regressione Fattoriale (Fama-French)")
+                    st.markdown("""
+                    Questo modulo consente di analizzare l'esposizione fattoriale di un asset utilizzando il **Modello a 5 Fattori di Fama-French con l'aggiunta del Momentum (6 fattori totali)**.
+                    """)
+                    
+                    # Layout a due colonne per configurazione e parametri
+                    col_cfg1, col_cfg2 = st.columns(2)
+                    
+                    with col_cfg1:
+                        reg_data_source = st.radio(
+                            "Sorgente Dati Asset",
+                            options=["Indice Caricato", "Yahoo Finance Ticker"],
+                            key="reg_data_source"
+                        )
+                        
+                        if reg_data_source == "Indice Caricato":
+                            selected_reg_asset = st.selectbox(
+                                "Seleziona l'Indice da analizzare",
+                                options=actual_analysis_indices,
+                                key="selected_reg_asset"
+                            )
+                            # Rilevamento della frequenza dell'indice selezionato
+                            try:
+                                asset_series = analysis_data[selected_reg_asset].dropna()
+                                if len(asset_series) > 2:
+                                    diffs_price = asset_series.index.to_series().diff().dropna()
+                                    median_days_price = diffs_price.median() / pd.Timedelta(days=1)
+                                    detected_freq = "daily" if median_days_price < 10 else "monthly"
+                                else:
+                                    detected_freq = "monthly"
+                            except Exception:
+                                detected_freq = "monthly"
+                                
+                            st.info(f"Frequenza rilevata automaticamente per '{selected_reg_asset}': **{detected_freq}**")
+                        else:
+                            reg_ticker = st.text_input(
+                                "Inserisci Ticker Yahoo Finance (es. SPY, VWCE.MI, AAPL)",
+                                value="SPY",
+                                key="reg_ticker"
+                            )
+                            detected_freq = st.selectbox(
+                                "Frequenza dei dati",
+                                options=["monthly", "daily"],
+                                index=0,
+                                key="reg_freq_yfinance"
+                            )
+                        
+                            
+                    with col_cfg2:
+                        ff_region = st.selectbox(
+                            "Regione dei Fattori Kenneth French",
+                            options=["USA", "Developed Markets", "Europe", "Emerging Markets", "Global"],
+                            index=0,
+                            key="ff_region"
+                        )
+                        
+                        # Gestione frequenza Emerging Markets
+                        if ff_region == "Emerging Markets":
+                            if detected_freq == "daily":
+                                st.warning("I fattori per 'Emerging Markets' sono disponibili solo a frequenza mensile. L'asset verrà risampillato su base mensile.")
+                            detected_freq_to_use = "monthly"
+                        else:
+                            detected_freq_to_use = detected_freq
+                            
+                        # Configurazione finestra di rolling beta in base alla frequenza
+                        if detected_freq_to_use == "monthly":
+                            min_w, max_w, val_w = 12, 120, 36
+                        else:
+                            min_w, max_w, val_w = 60, 500, 252
+                            
+                        rolling_window = st.slider(
+                            "Finestra Rolling Beta (osservazioni)",
+                            min_value=min_w,
+                            max_value=max_w,
+                            value=val_w,
+                            key="reg_rolling_window"
+                        )
+                        
+                        cov_type = st.selectbox(
+                            "Tipo Errore Standard OLS",
+                            options=["HAC", "nonrobust", "HC3"],
+                            index=0,
+                            key="reg_cov_type"
+                        )
+                        
+                        # Soglia alert R² fissata al 95% nel codice
+                    
+                    # Bottone di avvio
+                    run_reg_btn = st.button("Avvia Regressione Fattoriale 🚀", type="primary", key="run_reg_btn")
+                    
+                    # Esecuzione e rendering dei risultati
+                    # Salviamo i risultati nello stato di Streamlit per mantenere la visualizzazione attiva
+                    if run_reg_btn or st.session_state.get("reg_completed", False):
+                        
+                        # Se cambia la configurazione, forziamo il ricalcolo se premuto il pulsante
+                        if run_reg_btn:
+                            st.session_state["reg_completed"] = False
+                            st.session_state["reg_ack_proceed_check"] = False
+                            
+                        try:
+                            reg_input_currency = st.session_state.get("reg_input_currency", "EUR")
+                            reg_display_currency = st.session_state.get("reg_display_currency", "EUR")
+                            
+                            # Prepara i dati dei rendimenti
+                            if reg_data_source == "Indice Caricato":
+                                asset_raw_prices = pd.DataFrame(analysis_data[selected_reg_asset].dropna())
+                                asset_raw_prices.columns = ['price']
+                                asset_name = selected_reg_asset
+                            else:
+                                if not reg_ticker.strip():
+                                    st.error("Inserisci un ticker Yahoo Finance valido.")
+                                    st.stop()
+                                    
+                                with st.spinner("Download dei dati dell'asset da Yahoo Finance..."):
+                                    from factor_regression.asset_parser import load_asset_from_yahoo
+                                    # Determina data inizio e fine in base all'indice dei dati caricati (se disponibili) per allineamento temporale
+                                    start_date_str = analysis_data.index.min().strftime("%Y-%m-%d")
+                                    end_date_str = analysis_data.index.max().strftime("%Y-%m-%d")
+                                    asset_raw_prices = load_asset_from_yahoo(reg_ticker.strip(), start_date_str, end_date_str, detected_freq_to_use)
+                                    asset_name = reg_ticker.strip()
+                                    
+                            # 1. Carica i cambi EUR/USD (BCE + Fed proxy)
+                            from factor_regression.exchange_rate import get_exchange_rates
+                            rates_df, is_online, last_rate_date = get_exchange_rates()
+                            
+                            # Avviso sullo stato dei cambi
+                            if not is_online:
+                                st.warning(f"⚠️ **Modalità Offline Tassi di Cambio**: Impossibile collegarsi alla BCE per scaricare i cambi aggiornati. I tassi storici sono disponibili fino al **{last_rate_date}**. Le serie temporali dell'asset verranno troncate a questa data.")
+                            else:
+                                st.info(f"ℹ️ **Tassi di Cambio Aggiornati**: Dati BCE allineati ad oggi (**{last_rate_date}**).")
+                                
+                            # Troncamento se le date dell'asset vanno oltre quelle dei cambi
+                            last_rate_dt = pd.to_datetime(last_rate_date)
+                            if asset_raw_prices.index.max() > last_rate_dt:
+                                asset_raw_prices = asset_raw_prices[asset_raw_prices.index <= last_rate_dt]
+                                st.info(f"⚠️ I dati dell'asset sono stati troncati al **{last_rate_date}** per allineamento con i tassi di cambio disponibili.")
+                                
+                            # 2. Calcolo dei rendimenti nella valuta nativa dell'asset
+                            from factor_regression.asset_parser import compute_returns
+                            asset_returns_native = compute_returns(asset_raw_prices, detected_freq_to_use)
+                            
+                            # 3. Conversione dei rendimenti in USD se la valuta in input è EUR
+                            rates_aligned = rates_df.reindex(asset_returns_native.index, method='ffill')
+                            
+                            if reg_input_currency == "EUR":
+                                # Converte i rendimenti da EUR a USD direttamente per evitare il bug di shift della data dei prezzi:
+                                # 1 + R_USD = (1 + R_EUR) * (EUR_USD_curr / EUR_USD_prev)
+                                rate_ratio = rates_aligned['EUR_USD'] / rates_aligned['EUR_USD'].shift(1).ffill()
+                                rate_ratio.iloc[0] = 1.0  # mantieni primo rendimento
+                                
+                                asset_returns_usd = asset_returns_native.copy()
+                                asset_returns_usd['asset_return'] = (1 + asset_returns_native['asset_return']) * rate_ratio - 1
+                            else:
+                                asset_returns_usd = asset_returns_native.copy()
+                                
+                            # Download dei fattori Fama-French (in USD)
+                            with st.spinner("Download dei fattori Fama-French da Kenneth French..."):
+                                from factor_regression.factors_fetcher import fetch_factors
+                                min_date = asset_returns_usd.index.min().strftime("%Y-%m-%d")
+                                max_date = asset_returns_usd.index.max().strftime("%Y-%m-%d")
+                                factors_df = fetch_factors(ff_region, detected_freq_to_use, min_date, max_date)
+                                
+                            # Allineamento dei Dati
+                            from factor_regression.regression_engine import (
+                                prepare_regression_dataset,
+                                run_static_regression,
+                                run_rolling_regression,
+                                calculate_factor_contributions
+                            )
+                            reg_df = prepare_regression_dataset(asset_returns_usd, factors_df)
+                            
+                            # Validazioni
+                            from factor_regression.config import MIN_OBSERVATIONS
+                            min_obs_required = MIN_OBSERVATIONS[detected_freq_to_use]
+                            n_obs = len(reg_df)
+                            
+                            if n_obs < min_obs_required:
+                                st.error(f"Errore: Osservazioni allineate insufficienti ({n_obs}). Sono richieste almeno {min_obs_required} osservazioni per la frequenza '{detected_freq_to_use}'.")
+                                st.stop()
+                                
+                            if rolling_window >= n_obs:
+                                st.error(f"Errore: La finestra di rolling selezionata ({rolling_window}) è superiore o uguale al numero totale di osservazioni allineate ({n_obs}).")
+                                st.stop()
+                                
+                            # Esecuzione regressioni (in USD)
+                            static_results = run_static_regression(reg_df, cov_type=cov_type)
+                            rolling_df = run_rolling_regression(reg_df, rolling_window)
+                            
+                            # 4. Conversione per la visualizzazione nella valuta scelta
+                            rates_reg = rates_df.reindex(reg_df.index, method='ffill')
+                            r2_threshold = 0.95  # Soglia alert R² fissata al 95%
+                            
+                            if reg_display_currency == "EUR":
+                                # Converte i rendimenti e fattori da USD a EUR
+                                display_df = reg_df.copy()
+                                rate_ratio_usd_to_eur = rates_reg['EUR_USD'].shift(1).ffill() / rates_reg['EUR_USD']
+                                rate_ratio_usd_to_eur.iloc[0] = 1.0
+                                
+                                display_df['asset_return'] = (1 + reg_df['asset_return']) * rate_ratio_usd_to_eur - 1
+                                display_df['RF'] = (1 + reg_df['RF']) * rate_ratio_usd_to_eur - 1
+                                display_df['asset_excess_return'] = display_df['asset_return'] - display_df['RF']
+                                
+                                factors_list = ['Mkt-RF', 'SMB', 'HML', 'RMW', 'CMA', 'Mom']
+                                for f in factors_list:
+                                    display_df[f] = (1 + reg_df[f]) * rate_ratio_usd_to_eur - 1
+                                    
+                                fitted_excess_usd = static_results['results_object'].fittedvalues
+                                fitted_total_usd = fitted_excess_usd + reg_df['RF']
+                                fitted_total_eur = (1 + fitted_total_usd) * rate_ratio_usd_to_eur - 1
+                                fitted_excess_display = fitted_total_eur - display_df['RF']
+                            else:
+                                # Rimane in USD
+                                display_df = reg_df.copy()
+                                fitted_excess_display = static_results['results_object'].fittedvalues
+                                
+                            # Ricalcolo dei contributi nella valuta di visualizzazione
+                            contrib_df = calculate_factor_contributions(static_results, display_df, annualize=True, frequency=detected_freq_to_use)
+                            
+                            # Memorizza nello stato di sessione per mantenere l'interfaccia persistente al cambio tab
+                            st.session_state["reg_completed"] = True
+                            st.session_state["reg_data"] = {
+                                "reg_df": reg_df,
+                                "display_df": display_df,
+                                "static_results": static_results,
+                                "rolling_df": rolling_df,
+                                "contrib_df": contrib_df,
+                                "fitted_excess_display": fitted_excess_display,
+                                "asset_name": asset_name,
+                                "ff_region": ff_region,
+                                "detected_freq_to_use": detected_freq_to_use,
+                                "rolling_window": rolling_window,
+                                "r2_threshold": r2_threshold,
+                                "reg_display_currency": reg_display_currency
+                            }
+                            
+                        except Exception as e:
+                            st.error(f"Errore durante l'elaborazione dell'analisi fattoriale: {e}")
+                            st.exception(e)
+                            st.session_state["reg_completed"] = False
+                            
+                    # Rendering dei risultati salvati nello stato di sessione
+                    if st.session_state.get("reg_completed", False):
+                        reg_data = st.session_state["reg_data"]
+                        reg_df = reg_data["reg_df"]
+                        display_df = reg_data["display_df"]
+                        static_results = reg_data["static_results"]
+                        rolling_df = reg_data["rolling_df"]
+                        contrib_df = reg_data["contrib_df"]
+                        fitted_excess_display = reg_data["fitted_excess_display"]
+                        asset_name = reg_data["asset_name"]
+                        ff_region = reg_data["ff_region"]
+                        detected_freq_to_use = reg_data["detected_freq_to_use"]
+                        rolling_window = reg_data["rolling_window"]
+                        r2_threshold = reg_data["r2_threshold"]
+                        reg_display_currency = reg_data["reg_display_currency"]
+                        
+                        # Sotto-schede dell'analisi fattoriale
+                        st.markdown("---")
+                        st.subheader(f"Risultati Analisi Fattoriale: **{asset_name}**")
+                        
+                        # Verifica bloccante dell'R-quadrato rispetto alla soglia
+                        if static_results['rsquared'] < r2_threshold:
+                            st.error(f"🚨 **ATTENZIONE: R-quadrato molto basso ({static_results['rsquared']*100:.2f}%) sotto la soglia di allerta ({r2_threshold*100:.0f}%)!**")
+                            st.markdown("""
+                            Il modello a 6 fattori Fama-French spiega meno della soglia impostata di variabilità dei rendimenti per questo asset. 
+                            I coefficienti, le scomposizioni e le metriche di questa regressione **potrebbero non essere affidabili**.
+                            """)
+                            
+                            proceed = st.checkbox(
+                                "Ho capito la scarsa affidabilità del modello e desidero comunque visualizzare i risultati e i grafici dell'analisi.",
+                                value=st.session_state.get("reg_ack_proceed_check", False),
+                                key="reg_ack_proceed_check"
+                            )
+                            
+                            if not proceed:
+                                st.info("👉 Per sbloccare la visualizzazione dei risultati, spunta la casella di conferma qui sopra.")
+                                st.stop()
+                        
+                        subtab_overview, subtab_static, subtab_rolling, subtab_dist, subtab_contrib, subtab_raw = st.tabs([
+                            "📋 Overview",
+                            "📊 Regressione Statica",
+                            "📈 Beta Rolling",
+                            "📉 Distribuzione Fattori",
+                            "💰 Scomposizione Rendimenti",
+                            "💾 Dati Allineati"
+                        ])
+                        
+                        from factor_regression.plots import (
+                            plot_cumulative_returns,
+                            plot_factor_boxplot,
+                            plot_rolling_betas,
+                            plot_rolling_betas_boxplot,
+                            plot_factor_contributions,
+                            plot_factor_correlation
+                        )
+                        
+                        # 1. Overview
+                        with subtab_overview:
+                            col_o1, col_o2, col_o3, col_o4 = st.columns(4)
+                            col_o1.metric("Osservazioni", int(static_results['nobs']))
+                            col_o2.metric("R-quadrato (R²)", f"{static_results['rsquared']:.4f}")
+                            col_o3.metric("R² Adjusted", f"{static_results['rsquared_adj']:.4f}")
+                            col_o4.metric("Durbin-Watson", f"{static_results['durbin_watson']:.2f}")
+                            
+                            st.plotly_chart(plot_cumulative_returns(display_df, static_results, fitted_excess_display), use_container_width=True)
+                            
+                            # Warning non bloccanti
+                            if static_results['rsquared'] < r2_threshold:
+                                st.warning(f"⚠️ **R-quadrato sotto la soglia ({r2_threshold*100:.0f}%)**: Il modello a 6 fattori Fama-French spiega solo il {static_results['rsquared']*100:.2f}% della variabilità dei rendimenti di questo asset.")
+                                
+                            pvals = static_results['pvalues']
+                            factors_list = ['Mkt-RF', 'SMB', 'HML', 'RMW', 'CMA', 'Mom']
+                            sig_factors = [f for f in factors_list if pvals[f] < 0.05]
+                            if not sig_factors:
+                                st.info("ℹ️ **Nessun Fattore Significativo**: Nessuno dei 6 fattori presenta un p-value inferiore a 0.05 (significatività 5%).")
+                            else:
+                                st.success(f"✔️ **Fattori Significativi (p-value < 0.05)**: {', '.join(sig_factors)}")
+                                
+                        # 2. Regressione Statica
+                        with subtab_static:
+                            st.subheader("Tabella dei Coefficienti (OLS)")
+                            params = static_results['params']
+                            bse = static_results['bse']
+                            tvals = static_results['tvalues']
+                            pvals = static_results['pvalues']
+                            
+                            labels_map = {
+                                'const': 'Alpha (const)',
+                                'Mkt-RF': 'Market Beta (Mkt-RF)',
+                                'SMB': 'Size Beta (SMB)',
+                                'HML': 'Value Beta (HML)',
+                                'RMW': 'Profitability Beta (RMW)',
+                                'CMA': 'Investment Beta (CMA)',
+                                'Mom': 'Momentum Beta (Mom)'
+                            }
+                            
+                            table_rows = []
+                            for idx in params.index:
+                                table_rows.append({
+                                    "Componente": labels_map.get(idx, idx),
+                                    "Coefficiente (Beta)": params[idx],
+                                    "Std Error": bse[idx],
+                                    "t-Stat": tvals[idx],
+                                    "p-Value": pvals[idx],
+                                    "Significativo (5%)": pvals[idx] < 0.05
+                                })
+                                
+                            coef_df = pd.DataFrame(table_rows)
+                            styled_coef_df = coef_df.style.format({
+                                "Coefficiente (Beta)": "{:.6f}",
+                                "Std Error": "{:.6f}",
+                                "t-Stat": "{:.4f}",
+                                "p-Value": "{:.4f}"
+                            })
+                            
+                            st.dataframe(styled_coef_df, use_container_width=True, hide_index=True)
+                            
+                            st.subheader("Metriche Diagnostiche del Modello")
+                            col_diag1, col_diag2 = st.columns(2)
+                            with col_diag1:
+                                st.write(f"**Tipo Errore Standard**: {static_results['covariance_type']}")
+                                if static_results['covariance_type'] == "HAC":
+                                    st.write(f"**Max Lags (HAC)**: {static_results['maxlags']}")
+                                st.write(f"**F-Statistic**: {static_results['fvalue']:.4f} (p-value: {static_results['f_pvalue']:.4f})")
+                            with col_diag2:
+                                st.write(f"**R-quadrato (R²)**: {static_results['rsquared']:.6f}")
+                                st.write(f"**R-quadrato Modificato**: {static_results['rsquared_adj']:.6f}")
+                                st.write(f"**Durbin-Watson Stat**: {static_results['durbin_watson']:.4f}")
+                                st.caption("Nota: DW vicino a 2.0 indica assenza di autocorrelazione nei residui.")
+                                
+                        # 3. Beta Rolling
+                        with subtab_rolling:
+                            st.subheader(f"Evoluzione Temporale delle Esposizioni (Finestra: {rolling_window} oss.)")
+                            st.plotly_chart(plot_rolling_betas(rolling_df), use_container_width=True)
+                            
+                            st.subheader("Distribuzione e Stabilità dei Beta Rolling")
+                            st.plotly_chart(plot_rolling_betas_boxplot(rolling_df), use_container_width=True)
+                            
+                            st.dataframe(rolling_df.style.format("{:.4f}"), use_container_width=True)
+                            
+                        # 4. Distribuzione dei Fattori
+                        with subtab_dist:
+                            st.subheader("Analisi Statistica Descrittiva dei Fattori")
+                            st.plotly_chart(plot_factor_boxplot(display_df), use_container_width=True)
+                            st.plotly_chart(plot_factor_correlation(display_df), use_container_width=True)
+                            
+                            factors_list = ['Mkt-RF', 'SMB', 'HML', 'RMW', 'CMA', 'Mom']
+                            desc_df = (display_df[factors_list] * 100).describe().T[['mean', 'std', 'min', '50%', 'max', 'count']]
+                            desc_df.columns = ['Media (%)', 'Dev. Std (%)', 'Min (%)', 'Mediana (%)', 'Max (%)', 'Osservazioni']
+                            st.write(f"**Statistiche Descrittive Storiche dei Fattori (espresse in % e convertite in {reg_display_currency})**")
+                            st.dataframe(desc_df.style.format("{:.4f}"), use_container_width=True)
+                            
+                        # 5. Scomposizione dei Rendimenti
+                        with subtab_contrib:
+                            st.subheader("Scomposizione della Performance Stima Media Annualizzata")
+                            st.plotly_chart(plot_factor_contributions(contrib_df), use_container_width=True)
+                            
+                            styled_contrib = contrib_df.copy()
+                            styled_contrib.columns = ["Fattore", "Beta Estimato", "Media Storica Fattore (Annuo %)", "Contributo Annuo Stimato (%)"]
+                            styled_contrib["Media Storica Fattore (Annuo %)"] = styled_contrib["Media Storica Fattore (Annuo %)"] * 100
+                            styled_contrib["Contributo Annuo Stimato (%)"] = styled_contrib["Contributo Annuo Stimato (%)"] * 100
+                            
+                            st.dataframe(styled_contrib.style.format({
+                                "Beta Stimato": "{:.4f}",
+                                "Media Storica Fattore (Annuo %)": "{:.2f}%",
+                                "Contributo Annuo Stimato (%)": "{:.2f}%"
+                            }, na_rep="-"), use_container_width=True, hide_index=True)
+                            
+                            st.info("ℹ️ **Nota Metodologica**: I contributi sono calcolati come $Beta_j \\times Media(Fattore_j)$. I fattori ed alpha sono annualizzati moltiplicando la media semplice per 12 (mensile) o per 252 (giornaliero).")
+                            
+                        # 6. Dati Allineati
+                        with subtab_raw:
+                            st.subheader(f"Dati Allineati (Valuta: {reg_display_currency})")
+                            st.dataframe(display_df.style.format("{:.6f}"), use_container_width=True)
+                            
+                            csv_data = display_df.to_csv().encode('utf-8')
+                            st.download_button(
+                                label="Scarica Dati Allineati in CSV 📥",
+                                data=csv_data,
+                                file_name=f"dati_allineati_{asset_name}_{reg_display_currency}.csv",
+                                mime="text/csv",
+                                key="reg_download_csv"
+                            )
 
 
             else:
