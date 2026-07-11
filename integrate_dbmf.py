@@ -210,6 +210,29 @@ def main():
     
     updated = False
     
+    # Integra i file estesi caricati (chart (7) - chart (11))
+    extended_files = {
+        "chart (7).csv": ["SCV"],
+        "chart (8).csv": ["MVOL"],
+        "chart (9).csv": ["XDEM"],
+        "chart (10).csv": ["EIMI"],
+        "chart (11).csv": ["XDEV"]
+    }
+    
+    for file_name, cols in extended_files.items():
+        data = integrate_file(file_name, cols)
+        if data:
+            for name, s in data.items():
+                if name in df_chart.columns:
+                    df_chart.drop(columns=[name], inplace=True)
+                # Re-normalizza al primo valore disponibile della serie
+                first_val = s.dropna().iloc[0]
+                s_normalized = (s / first_val) * 10000
+                s_normalized = s_normalized.ffill()
+                df_chart = df_chart.join(s_normalized, how='outer')
+                print(f"[+] Integrato asset esteso {name} (normalizzato a 10000 in {s.dropna().index[0].strftime('%m/%Y')})")
+                updated = True
+                
     # Integra Testfolio
     s_testfolio = integrate_testfolio()
     if s_testfolio is not None:
