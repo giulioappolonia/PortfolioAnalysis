@@ -40,7 +40,7 @@ def plot_cumulative_returns(df: pd.DataFrame, regression_result: Dict[str, Any],
         yaxis_title="Rendimento Cumulato (%)",
         hovermode="x unified",
         template="plotly_white",
-        legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01)
+        legend=dict(yanchor="top", y=1, xanchor="left", x=1.02)
     )
     return fig
 
@@ -111,7 +111,7 @@ def plot_rolling_betas(rolling_df: pd.DataFrame) -> go.Figure:
         yaxis_title="Valore dei Coefficienti",
         hovermode="x unified",
         template="plotly_white",
-        legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01)
+        legend=dict(yanchor="top", y=1, xanchor="left", x=1.02)
     )
     return fig
 

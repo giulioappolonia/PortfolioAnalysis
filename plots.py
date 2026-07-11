@@ -1,4 +1,5 @@
 import plotly.graph_objects as go
+import numpy as np
 import plotly.express as px
 from rolling_calculations import create_short_names # Mantenuto l'import
 import plotly.colors # Importa i colori di plotly
@@ -274,4 +275,98 @@ def plot_detailed_window_analysis(min_median_data, selected_assets, title=None):
                       hovermode="closest", # Tooltip specifico per l'elemento su cui si passa il mouse
                       height=600 # Aumenta l'altezza per accomodare meglio i box plot
                       )
+    return fig
+
+def plot_overlaid_histogram(rolling_returns, title=None):
+    """
+    Crea un istogramma di frequenza sovrapposto per confrontare la distribuzione di tutti gli asset.
+    """
+    if rolling_returns is None or rolling_returns.empty:
+        return go.Figure().update_layout(title="Nessun dato disponibile")
+
+    fig = go.Figure()
+    
+    for col in rolling_returns.columns:
+        fig.add_trace(go.Histogram(
+            x=rolling_returns[col].dropna(),
+            histnorm='probability density',
+            name=col,
+            opacity=0.6,
+            nbinsx=30
+        ))
+
+    fig.update_layout(
+        title=title if title else "Confronto Distribuzioni Rendimenti Rolling",
+        xaxis_title="Rendimento Annualizzato",
+        yaxis_title="Densità di Probabilità",
+        xaxis_tickformat='.1%',
+        barmode='overlay', # Sovrapposizione
+        template="plotly_white",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        hovermode="x unified",
+        height=500
+    )
+    return fig
+
+def plot_single_histogram_with_normal(rolling_returns, selected_asset, title=None):
+    """
+    Crea un istogramma empirico per un singolo asset con overlay della curva normale teorica.
+    Include anche marker verticali per Media, Mediana e VaR Storico 95%.
+    """
+    if rolling_returns is None or rolling_returns.empty or selected_asset not in rolling_returns.columns:
+        return go.Figure().update_layout(title="Dati non disponibili")
+
+    data = rolling_returns[selected_asset].dropna()
+    if data.empty:
+        return go.Figure().update_layout(title="Dati vuoti")
+
+    mean_val = data.mean()
+    median_val = data.median()
+    std_val = data.std()
+    var_95 = data.quantile(0.05)
+
+    fig = go.Figure()
+
+    # Istogramma empirico (densità di probabilità)
+    fig.add_trace(go.Histogram(
+        x=data,
+        histnorm='probability density',
+        name='Densità Empirica',
+        marker_color='#1f77b4',
+        opacity=0.65,
+        nbinsx=30
+    ))
+
+    # Curva Normale Teorica
+    x_min, x_max = data.min() - 0.02, data.max() + 0.02
+    x_range = np.linspace(x_min, x_max, 200)
+    
+    if std_val > 0:
+        pdf_y = (1 / (std_val * np.sqrt(2 * np.pi))) * np.exp(-0.5 * ((x_range - mean_val) / std_val) ** 2)
+        fig.add_trace(go.Scatter(
+            x=x_range,
+            y=pdf_y,
+            mode='lines',
+            name='Normale Teorica',
+            line=dict(color='black', width=2.5)
+        ))
+
+    # Aggiungi linee verticali
+    fig.add_vline(x=mean_val, line_dash="dash", line_color="#ff7f0e", line_width=2,
+                  annotation_text="Media", annotation_position="top right")
+    fig.add_vline(x=median_val, line_dash="solid", line_color="#2ca02c", line_width=2,
+                  annotation_text="Mediana", annotation_position="top left")
+    fig.add_vline(x=var_95, line_dash="dot", line_color="#d62728", line_width=2,
+                  annotation_text="VaR 95%", annotation_position="top left")
+
+    fig.update_layout(
+        title=title if title else f"Distribuzione di Frequenza per {selected_asset}",
+        xaxis_title="Rendimento Annualizzato",
+        yaxis_title="Densità di Probabilità",
+        xaxis_tickformat='.1%',
+        template="plotly_white",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        hovermode="x unified",
+        height=500
+    )
     return fig

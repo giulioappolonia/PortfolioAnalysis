@@ -5,7 +5,7 @@ import os
 import tempfile
 from data_loader import load_data # Assumi che esista data_loader.py con la funzione load_data
 from rolling_calculations import (calculate_rolling_returns, calculate_min_median_by_window, calculate_risk_metrics, create_portfolio) # Assumi esista rolling_calculations.py
-from plots import (plot_rolling_returns, plot_boxplot, plot_violinplot, plot_min_vs_window, plot_median_vs_window, plot_combined_min_median, plot_detailed_window_analysis) # Assumi esista plots.py
+from plots import (plot_rolling_returns, plot_boxplot, plot_violinplot, plot_min_vs_window, plot_median_vs_window, plot_combined_min_median, plot_detailed_window_analysis, plot_overlaid_histogram, plot_single_histogram_with_normal) # Assumi esista plots.py
 
 from risk_metrics import PortfolioRiskMetrics # Importa la classe delle metriche di rischio
 import math # Needed for sqrt(12)
@@ -131,6 +131,10 @@ with st.sidebar:
     st.header("Opzioni")
     uploaded_files = st.file_uploader("Carica uno o più file CSV o Excel", type=["csv", "xls", "xlsx"], accept_multiple_files=True)
     
+    keep_default = False
+    if uploaded_files:
+        keep_default = st.checkbox("Mantieni dati di esempio", value=False, help="Spunta per mantenere gli indici di esempio precaricati insieme ai file caricati.")
+    
     st.markdown("---")
     st.markdown("### Configurazione Valute")
     reg_input_currency = st.selectbox(
@@ -150,7 +154,6 @@ with st.sidebar:
     st.markdown("---")
     
     analysis_mode = st.radio("Modalità di analisi", ["Confronto Completo", "Indice Singolo", "Confronto Indici", "Portafoglio"], index=0)
-    rolling_years = st.slider("Periodo Rolling (anni)", min_value=1, max_value=20, value=3, step=1)
 
     # Opzioni per la modalità Confronto Completo
     max_indices = None # Inizializza a None
@@ -200,6 +203,19 @@ def main():
 
                     except Exception as e:
                         st.error(f"Errore generico durante l'elaborazione del file {uploaded_file.name}: {e}")
+        
+        # Carica il file di default se richiesto dall'utente tramite checkbox
+        if keep_default:
+            default_file = "chart_default.csv"
+            if os.path.exists(default_file):
+                try:
+                    data = load_data(default_file)
+                    if data is not None and not data.empty:
+                        loaded_dfs[default_file] = data
+                    else:
+                        st.warning("Il file di esempio non contiene dati validi.")
+                except Exception as e:
+                    st.error(f"Errore nel caricamento del file di esempio: {e}")
     else:
         # Logica per caricare il file di default se nessun file è stato caricato
         default_file = "chart_default.csv"
@@ -498,24 +514,8 @@ def main():
                         st.warning("Impossibile calcolare i rendimenti periodici per gli indici selezionati.")
                         risk_metrics_df = pd.DataFrame() # Empty DataFrame if no returns data
 
-                    # Calcola i rendimenti rolling e i dati per l'analisi per finestre
-                    # (solo se ci sono abbastanza dati per almeno un asset per il periodo rolling specificato)
-                    st.info("Preparazione dati per Rendimenti Rolling e Analisi per Finestre...")
-                    min_valid_data_points_rolling = rolling_years * 12 + 1 # Assuming monthly data
-                    has_enough_data_rolling = any(analysis_data[col].dropna().shape[0] >= min_valid_data_points_rolling for col in analysis_data.columns)
-
-
-                    rolling_returns = pd.DataFrame() # Initialize as empty
-                    if has_enough_data_rolling:
-                         try:
-                             rolling_returns = calculate_rolling_returns(analysis_data, rolling_years)
-                         except Exception as e:
-                             st.error(f"Errore durante il calcolo dei rendimenti rolling: {e}")
-                             rolling_returns = pd.DataFrame() # Set to empty on error
-                    else:
-                        st.warning(f"Non abbastanza dati per calcolare i rendimenti rolling di {rolling_years} anni per nessuno degli asset selezionati.")
-
-
+                    # Calcola i dati per l'analisi per finestre
+                    st.info("Preparazione dati per Analisi per Finestre...")
                     min_median_data = {} # Initialize as empty
                     try:
                         min_median_data = calculate_min_median_by_window(analysis_data)
@@ -533,6 +533,23 @@ def main():
 
                 # --- Contenuto per la scheda "Rendimenti Rolling & Distribuzioni" ---
                 with tab_rolling:
+                    # Slider inserito direttamente all'interno della tab
+                    rolling_years = st.slider("Periodo Rolling (anni)", min_value=1, max_value=20, value=3, step=1, key="rolling_years_slider")
+
+                    # Calcola i rendimenti rolling per il periodo specificato
+                    min_valid_data_points_rolling = rolling_years * 12 + 1 # Assuming monthly data
+                    has_enough_data_rolling = any(analysis_data[col].dropna().shape[0] >= min_valid_data_points_rolling for col in analysis_data.columns)
+
+                    rolling_returns = pd.DataFrame() # Initialize as empty
+                    if has_enough_data_rolling:
+                         try:
+                             rolling_returns = calculate_rolling_returns(analysis_data, rolling_years)
+                         except Exception as e:
+                             st.error(f"Errore durante il calcolo dei rendimenti rolling: {e}")
+                             rolling_returns = pd.DataFrame() # Set to empty on error
+                    else:
+                        st.warning(f"Non abbastanza dati per calcolare i rendimenti rolling di {rolling_years} anni per nessuno degli asset selezionati.")
+
                     st.subheader(f"Analisi per il periodo rolling di {rolling_years} anni")
                     if rolling_returns is not None and not rolling_returns.empty:
                         # Visualizza Statistiche sui rendimenti rolling
@@ -549,15 +566,63 @@ def main():
                         fig_returns = plot_rolling_returns(rolling_returns, title=f"Rendimenti Rolling ({rolling_years} anni)")
                         st.plotly_chart(fig_returns, width='stretch')
 
-                        # Box Plot e Violin Plot
+                        # Box Plot, Violin Plot e Istogramma
                         st.subheader("Distribuzione dei Rendimenti Rolling")
-                        tab_box, tab_violin = st.tabs(["Box Plot", "Violin Plot"])
+                        tab_box, tab_violin, tab_hist = st.tabs(["Box Plot", "Violin Plot", "Istogramma di Frequenza"])
                         with tab_box:
                             fig_box = plot_boxplot(rolling_returns, title=f"Box Plot ({rolling_years} anni)")
                             st.plotly_chart(fig_box, width='stretch')
                         with tab_violin:
                             fig_violin = plot_violinplot(rolling_returns, title=f"Violin Plot ({rolling_years} anni)")
                             st.plotly_chart(fig_violin, width='stretch')
+                        with tab_hist:
+                            # Selezione modalità
+                            hist_mode = st.radio(
+                                "Seleziona modalità di visualizzazione:",
+                                ["Confronto Sovrapposto (Tutti gli Asset)", "Dettaglio Singolo Asset"],
+                                horizontal=True,
+                                key="hist_mode"
+                            )
+                            
+                            if hist_mode == "Confronto Sovrapposto (Tutti gli Asset)":
+                                fig_hist = plot_overlaid_histogram(rolling_returns, title=f"Confronto Distribuzioni ({rolling_years} anni)")
+                                st.plotly_chart(fig_hist, width='stretch')
+                            else:
+                                selected_asset_hist = st.selectbox(
+                                    "Seleziona l'asset da analizzare nel dettaglio:",
+                                    options=rolling_returns.columns.tolist(),
+                                    key="selected_asset_hist"
+                                )
+                                
+                                fig_hist_single = plot_single_histogram_with_normal(
+                                    rolling_returns, 
+                                    selected_asset_hist, 
+                                    title=f"Distribuzione {selected_asset_hist} vs Normale ({rolling_years} anni)"
+                                )
+                                st.plotly_chart(fig_hist_single, width='stretch')
+                                
+                                # Calcolo metriche di forma e normalità
+                                import scipy.stats as stats
+                                asset_data = rolling_returns[selected_asset_hist].dropna()
+                                
+                                if len(asset_data) > 3: # Shapiro-Wilk richiede almeno 3 osservazioni
+                                    skewness = stats.skew(asset_data)
+                                    kurtosis = stats.kurtosis(asset_data) # Eccesso di curto-si
+                                    try:
+                                        shapiro_stat, shapiro_p = stats.shapiro(asset_data)
+                                    except Exception:
+                                        shapiro_p = np.nan
+                                    
+                                    # Calcolo VaR Storico 95%
+                                    var_95 = asset_data.quantile(0.05)
+                                    
+                                    m1, m2, m3, m4 = st.columns(4)
+                                    m1.metric("Asimmetria (Skewness)", f"{skewness:.3f}", help="Se < 0: coda sinistra più lunga (rischio perdite estreme). Se > 0: coda destra più lunga.")
+                                    m2.metric("Curto-si in Eccesso", f"{kurtosis:.3f}", help="Se > 0 (leptocurtica): code più grasse della normale (più eventi estremi).")
+                                    m3.metric("Test Shapiro-Wilk (p-value)", f"{shapiro_p:.4e}" if not np.isnan(shapiro_p) else "N/D", help="Se p-value < 0.05, la distribuzione NON è considerabile statisticamente normale.")
+                                    m4.metric("VaR Storico (95%)", f"{var_95:.2%}", help="Rendimento minimo atteso nel 95% dei casi. C'è solo il 5% di probabilità di fare peggio di questo valore su base annua.")
+                                else:
+                                    st.warning("Numero insufficiente di dati per calcolare le statistiche di dettaglio.")
                     else:
                         st.warning("Nessun dato valido per l'analisi dei Rendimenti Rolling con le opzioni selezionate o dati insufficienti.")
 
@@ -625,41 +690,6 @@ def main():
 
 
                 with tab_risk_metrics:
-                    st.subheader("Metriche di Rischio per l'intero Periodo Disponibile")
-                    
-                    st.markdown("""
-                    Benvenuto nella sezione delle **Metriche di Rischio**. Per aiutarti a navigare tra questi indicatori, li abbiamo organizzati seguendo un percorso logico-matematico che va dalle basi fondamentali alla sintesi finale:
-
-                    1. **Fondamenta (Metriche di Base)**  
-                    Queste metriche sono calcolate direttamente dai prezzi o dai rendimenti periodici, senza dipendere da altri indicatori di rischio.
-                    * **Total Return (%)**: Il guadagno assoluto. Indica il risultato finale assoluto dell'investimento.
-                    * **Annualized Return (%)**: La base per tutti i rapporti di efficienza. Indica la velocità media di crescita del capitale.
-                    * **Annualized Volatility (%)**: La misura di rischio standard (usata poi per Sharpe e Pitfall). Indica incertezza e instabilità; alta volatilità significa forti sbalzi di prezzo.
-                    * **Max Drawdown (%)**: Il calo massimo storico (fondamento per il Calmar). Indica il rischio massimo storico; quanto avresti perso nel momento peggiore.
-                    * **Downside Risk (%)**: Volatilità focalizzata solo sulle perdite (fondamento per il Sortino). Indica il vero rischio di perdere denaro, ignorando la volatilità "positiva" (rialzi).
-                    * **VaR_Returns(95%) (%)**: La soglia di perdita "normale" nel periodo. Indica il rischio "normale" di mercato su base periodica (es. mensile).
-
-                    2. **Efficienza Classica e Code (Primo Livello di Derivazione)**  
-                    Indicatori che mettono in relazione il rendimento con una singola metrica di base o approfondiscono la statistica delle code.
-                    * **Sharpe Ratio**: Relazione Rendimento / Volatilità. Indica l'efficienza classica: quanto "paga" assumersi dei rischi standard.
-                    * **Sortino Ratio**: Relazione Rendimento / Downside Risk. Indica l'efficienza nel generare profitti minimizzando solo le perdite (non le oscillazioni).
-                    * **Calmar Ratio**: Relazione Rendimento / Max Drawdown. Indica la resilienza: capacità di recuperare e guadagnare dopo il peggior disastro.
-                    * **CVaR_Returns(95%) (%)**: Approfondimento del VaR (media delle perdite oltre la soglia). Indica quanto ci si aspetta di perdere quando le cose vanno molto male.
-
-                    3. **Analisi Avanzata dello Stress (Il sistema Ulcer e DaR)**  
-                    Metriche che analizzano l'intera distribuzione dei cali (drawdown) anziché solo il punto peggiore.
-                    * **Ulcer Index**: Calcolato sull'intero storico dei drawdown (fondamento per UPI e Penalized Risk). Indica la "quantità di dolore" sofferta; penalizza periodi lunghi e profondi di perdita.
-                    * **Ulcer Performance Index**: Relazione Rendimento / Ulcer Index. Indica l'efficienza nel generare profitti minimizzando la sofferenza dei cali.
-                    * **DaR(95%) (%)**: Soglia di rischio sui drawdown (fondamento per CDaR). Indica quanto potresti perdere in una situazione di mercato negativa ma non estrema.
-                    * **CDaR(95%) (%)**: Media dei drawdown oltre la soglia DaR (fondamento per il Pitfall). Indica il danno atteso durante un crollo di mercato grave ("Cigno Nero").
-
-                    4. **Alternative Portfolio Theory (Sintesi Finale)**  
-                    Il culmine del percorso, dove le metriche precedenti vengono combinate per definire il rischio "totale" (durata, profondità e sorpresa).
-                    * **Pitfall Indicator**: Mette in relazione la gravità dei crolli (CDaR) con la Volatilità standard. Se alto, indica un rischio nascosto: l'asset sembra tranquillo ma ha crolli improvvisi e violenti.
-                    * **Penalized Risk (%)**: Sintesi matematica tra lo stress continuo (Ulcer Index) e gli eventi estremi (Pitfall Indicator). Fornisce una visione completa del rischio: quanto a lungo perdi e quanto violentemente.
-                    * **Serenity Ratio**: Il risultato finale. Indica la generazione di rendimento con il minimo rischio totale (stress + eventi estremi).
-                    """)
-
                     if not risk_metrics_df.empty:
                         # TRASPOSIZIONE: Metriche sulle COLONNE, Asset sulle RIGHE
                         df_to_display = risk_metrics_df.T
@@ -715,6 +745,42 @@ def main():
 
                     else:
                          st.warning("Nessuna metrica di rischio calcolata per gli indici selezionati. Assicurati che i dati caricati contengano abbastanza punti e che gli indici siano stati selezionati correttamente.")
+
+                    st.markdown("---")
+                    st.subheader("Metriche di Rischio per l'intero Periodo Disponibile")
+                    
+                    st.markdown("""
+                    Benvenuto nella sezione delle **Metriche di Rischio**. Per aiutarti a navigare tra questi indicatori, li abbiamo organizzati seguendo un percorso logico-matematico che va dalle basi fondamentali alla sintesi finale:
+
+                    1. **Fondamenta (Metriche di Base)**  
+                    Queste metriche sono calcolate direttamente dai prezzi o dai rendimenti periodici, senza dipendere da altri indicatori di rischio.
+                    * **Total Return (%)**: Il guadagno assoluto. Indica il risultato finale assoluto dell'investimento.
+                    * **Annualized Return (%)**: La base per tutti i rapporti di efficienza. Indica la velocità media di crescita del capitale.
+                    * **Annualized Volatility (%)**: La misura di rischio standard (usata poi per Sharpe e Pitfall). Indica incertezza e instabilità; alta volatilità significa forti sbalzi di prezzo.
+                    * **Max Drawdown (%)**: Il calo massimo storico (fondamento per il Calmar). Indica il rischio massimo storico; quanto avresti perso nel momento peggiore.
+                    * **Downside Risk (%)**: Volatilità focalizzata solo sulle perdite (fondamento per il Sortino). Indica il vero rischio di perdere denaro, ignorando la volatilità "positiva" (rialzi).
+                    * **VaR_Returns(95%) (%)**: La soglia di perdita "normale" nel periodo. Indica il rischio "normale" di mercato su base periodica (es. mensile).
+
+                    2. **Efficienza Classica e Code (Primo Livello di Derivazione)**  
+                    Indicatori che mettono in relazione il rendimento con una singola metrica di base o approfondiscono la statistica delle code.
+                    * **Sharpe Ratio**: Relazione Rendimento / Volatilità. Indica l'efficienza classica: quanto "paga" assumersi dei rischi standard.
+                    * **Sortino Ratio**: Relazione Rendimento / Downside Risk. Indica l'efficienza nel generare profitti minimizzando solo le perdite (non le oscillazioni).
+                    * **Calmar Ratio**: Relazione Rendimento / Max Drawdown. Indica la resilienza: capacità di recuperare e guadagnare dopo il peggior disastro.
+                    * **CVaR_Returns(95%) (%)**: Approfondimento del VaR (media delle perdite oltre la soglia). Indica quanto ci si aspetta di perdere quando le cose vanno molto male.
+
+                    3. **Analisi Avanzata dello Stress (Il sistema Ulcer e DaR)**  
+                    Metriche che analizzano l'intera distribuzione dei cali (drawdown) anziché solo il punto peggiore.
+                    * **Ulcer Index**: Calcolato sull'intero storico dei drawdown (fondamento per UPI e Penalized Risk). Indica la "quantità di dolore" sofferta; penalizza periodi lunghi e profondi di perdita.
+                    * **Ulcer Performance Index**: Relazione Rendimento / Ulcer Index. Indica l'efficienza nel generare profitti minimizzando la sofferenza dei cali.
+                    * **DaR(95%) (%)**: Soglia di rischio sui drawdown (fondamento per CDaR). Indica quanto potresti perdere in una situazione di mercato negativa ma non estrema.
+                    * **CDaR(95%) (%)**: Media dei drawdown oltre la soglia DaR (fondamento per il Pitfall). Indica il danno atteso durante un crollo di mercato grave ("Cigno Nero").
+
+                    4. **Alternative Portfolio Theory (Sintesi Finale)**  
+                    Il culmine del percorso, dove le metriche precedenti vengono combinate per definire il rischio "totale" (durata, profondità e sorpresa).
+                    * **Pitfall Indicator**: Mette in relazione la gravità dei crolli (CDaR) con la Volatilità standard. Se alto, indica un rischio nascosto: l'asset sembra tranquillo ma ha crolli improvvisi e violenti.
+                    * **Penalized Risk (%)**: Sintesi matematica tra lo stress continuo (Ulcer Index) e gli eventi estremi (Pitfall Indicator). Fornisce una visione completa del rischio: quanto a lungo perdi e quanto violentemente.
+                    * **Serenity Ratio**: Il risultato finale. Indica la generazione di rendimento con il minimo rischio totale (stress + eventi estremi).
+                    """)
 
                 # --- Contenuto per la scheda "Regressione Fattoriale" ---
                 with tab_factors:
