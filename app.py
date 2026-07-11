@@ -137,13 +137,6 @@ with st.sidebar:
     
     st.markdown("---")
     st.markdown("### Configurazione Valute")
-    reg_input_currency = st.selectbox(
-        "Valuta Dati in Input",
-        options=["EUR", "USD"],
-        index=0,
-        key="reg_input_currency",
-        help="Seleziona la valuta in cui sono denominati i dati dell'asset in input."
-    )
     reg_display_currency = st.selectbox(
         "Valuta di Visualizzazione",
         options=["EUR", "USD"],
@@ -151,6 +144,19 @@ with st.sidebar:
         key="reg_display_currency",
         help="Seleziona la valuta in cui visualizzare i rendimenti effettivi, stimati e la scomposizione della performance."
     )
+    
+    # Valuta di input per ciascun file caricato
+    input_currencies = {}
+    if uploaded_files:
+        st.markdown("**Valuta dei File Caricati:**")
+        for uploaded_file in uploaded_files:
+            input_currencies[uploaded_file.name] = st.selectbox(
+                f"Valuta per {uploaded_file.name}",
+                options=["EUR", "USD"],
+                index=0,
+                key=f"input_currency_{uploaded_file.name}",
+                help=f"Seleziona la valuta nativa dei dati in {uploaded_file.name}."
+            )
     st.markdown("---")
     
     analysis_mode = st.radio("Modalità di analisi", ["Confronto Completo", "Indice Singolo", "Confronto Indici", "Portafoglio"], index=0)
@@ -170,6 +176,7 @@ with st.sidebar:
     period_risk_free_rate = 0.0 # Mantenuto fisso a 0.0 come da ipotesi
 
 def main():
+    input_currencies = {}
     combined_data = None
     loaded_dfs = {} # Dizionario per conservare i DataFrames caricati da ciascun file
 
@@ -233,6 +240,42 @@ def main():
 
     # Dopo aver processato tutti i file (caricati o default), combina i DataFrames
     if loaded_dfs:
+        # Conversione valute allineando alla valuta di visualizzazione reg_display_currency
+        rates_df = None
+        rates_m = None
+        reg_display_currency = st.session_state.get("reg_display_currency", "EUR")
+        
+        for file_name, df in list(loaded_dfs.items()):
+            input_curr = "EUR" if file_name == "chart_default.csv" else input_currencies.get(file_name, "EUR")
+            
+            if input_curr != reg_display_currency:
+                try:
+                    if rates_df is None:
+                        from factor_regression.exchange_rate import get_exchange_rates
+                        rates_df, is_online, _ = get_exchange_rates()
+                        try:
+                            rates_m = rates_df['EUR_USD'].resample('ME').last()
+                        except ValueError:
+                            rates_m = rates_df['EUR_USD'].resample('M').last()
+                        rates_m.index = rates_m.index.map(lambda x: x.replace(day=1))
+                    
+                    rates_aligned = rates_m.reindex(df.index).ffill().bfill()
+                    
+                    for col in df.columns:
+                        if input_curr == "USD" and reg_display_currency == "EUR":
+                            df[col] = df[col] / rates_aligned
+                        elif input_curr == "EUR" and reg_display_currency == "USD":
+                            df[col] = df[col] * rates_aligned
+                        
+                        first_valid_idx = df[col].first_valid_index()
+                        if first_valid_idx is not None:
+                            first_val = df.loc[first_valid_idx, col]
+                            if first_val != 0:
+                                df[col] = (df[col] / first_val) * 10000
+                    
+                    loaded_dfs[file_name] = df
+                except Exception as currency_err:
+                    st.error(f"Errore nella conversione valuta per il file {file_name}: {currency_err}")
         # Se siamo nel caso di default (nessun upload), non mostriamo "Combinazione dati..." se c'è un solo file
         if len(loaded_dfs) > 1 or uploaded_files:
              st.info("Combinazione dei dati caricati...")
@@ -824,6 +867,13 @@ def main():
                                 value="SPY",
                                 key="reg_ticker"
                             )
+                            yahoo_input_currency = st.selectbox(
+                                "Valuta Ticker Yahoo Finance",
+                                options=["EUR", "USD"],
+                                index=1,  # Default a USD
+                                key="yahoo_input_currency",
+                                help="Valuta in cui sono denominati i prezzi storici del ticker su Yahoo Finance."
+                            )
                             detected_freq = st.selectbox(
                                 "Frequenza dei dati",
                                 options=["monthly", "daily"],
@@ -884,7 +934,6 @@ def main():
                             st.session_state["reg_ack_proceed_check"] = False
                             
                         try:
-                            reg_input_currency = st.session_state.get("reg_input_currency", "EUR")
                             reg_display_currency = st.session_state.get("reg_display_currency", "EUR")
                             
                             # Prepara i dati dei rendimenti
@@ -892,6 +941,7 @@ def main():
                                 asset_raw_prices = pd.DataFrame(analysis_data[selected_reg_asset].dropna())
                                 asset_raw_prices.columns = ['price']
                                 asset_name = selected_reg_asset
+                                asset_curr = reg_display_currency
                             else:
                                 if not reg_ticker.strip():
                                     st.error("Inserisci un ticker Yahoo Finance valido.")
@@ -904,6 +954,7 @@ def main():
                                     end_date_str = analysis_data.index.max().strftime("%Y-%m-%d")
                                     asset_raw_prices = load_asset_from_yahoo(reg_ticker.strip(), start_date_str, end_date_str, detected_freq_to_use)
                                     asset_name = reg_ticker.strip()
+                                    asset_curr = st.session_state.get("yahoo_input_currency", "USD")
                                     
                             # 1. Carica i cambi EUR/USD (BCE + Fed proxy)
                             from factor_regression.exchange_rate import get_exchange_rates
@@ -928,7 +979,7 @@ def main():
                             # 3. Conversione dei rendimenti in USD se la valuta in input è EUR
                             rates_aligned = rates_df.reindex(asset_returns_native.index, method='ffill')
                             
-                            if reg_input_currency == "EUR":
+                            if asset_curr == "EUR":
                                 # Converte i rendimenti da EUR a USD direttamente per evitare il bug di shift della data dei prezzi:
                                 # 1 + R_USD = (1 + R_EUR) * (EUR_USD_curr / EUR_USD_prev)
                                 rate_ratio = rates_aligned['EUR_USD'] / rates_aligned['EUR_USD'].shift(1).ffill()

@@ -74,7 +74,21 @@ def integrate_testfolio():
             return None
             
     dates = pd.to_datetime(timestamps, unit="s")
-    s_daily = pd.Series(values, index=dates)
+    s_daily_usd = pd.Series(values, index=dates)
+    
+    # CONVERSIONE DA USD A EUR
+    try:
+        print("[+] Caricamento tassi di cambio EUR/USD per conversione valuta...")
+        from factor_regression.exchange_rate import get_exchange_rates
+        rates_df, _, last_date = get_exchange_rates()
+        rates_aligned = rates_df['EUR_USD'].reindex(s_daily_usd.index).ffill().bfill()
+        
+        # Converte da USD a EUR: Valore_EUR = Valore_USD / Tasso_EUR_USD
+        s_daily = s_daily_usd / rates_aligned
+        print("[+] Conversione da USD a EUR completata.")
+    except Exception as e:
+        print(f"[-] Impossibile convertire in EUR (errore tassi di cambio): {e}. Procedo con i valori originali in USD.")
+        s_daily = s_daily_usd
     
     # Resample a mensile (valore di fine mese)
     s_monthly = resample_series_monthly(s_daily)
