@@ -219,12 +219,6 @@ def main():
         
         # Merge
         df_chart = df_chart.join(s_testfolio, how='outer')
-        
-        # Backfill dei dati antecedenti all'inizio della serie (imposta a 10000)
-        first_date = s_testfolio.index.min()
-        df_chart.loc[df_chart.index < first_date, s_testfolio.name] = 10000.0
-        # Ffill per i valori successivi all'ultimo dato per sicurezza
-        df_chart[s_testfolio.name] = df_chart[s_testfolio.name].ffill()
         print(f"[+] Integrato {s_testfolio.name} nel DataFrame.")
         updated = True
         
@@ -237,11 +231,6 @@ def main():
             
         # Merge
         df_chart = df_chart.join(s_socgen, how='outer')
-        
-        # Backfill
-        first_date = s_socgen.index.min()
-        df_chart.loc[df_chart.index < first_date, s_socgen.name] = 10000.0
-        df_chart[s_socgen.name] = df_chart[s_socgen.name].ffill()
         print(f"[+] Integrato {s_socgen.name} nel DataFrame.")
         updated = True
 
@@ -251,16 +240,13 @@ def main():
         for name, s in c5_data.items():
             if name in df_chart.columns:
                 df_chart.drop(columns=[name], inplace=True)
-            # Allinea all'indice del chart predefinito
-            s_aligned = s.reindex(df_chart.index)
-            non_empty = s_aligned.dropna()
-            if not non_empty.empty:
-                first_val = non_empty.iloc[0]
-                s_normalized = (s_aligned / first_val) * 10000
-                s_normalized = s_normalized.ffill()
-                df_chart = df_chart.join(s_normalized, how='outer')
-                print(f"[+] Integrato {name} (normalizzato a 10000 in {non_empty.index[0].strftime('%m/%Y')})")
-                updated = True
+            # Re-normalizza al primo valore disponibile della serie
+            first_val = s.dropna().iloc[0]
+            s_normalized = (s / first_val) * 10000
+            s_normalized = s_normalized.ffill()
+            df_chart = df_chart.join(s_normalized, how='outer')
+            print(f"[+] Integrato {name} (normalizzato a 10000 in {s.dropna().index[0].strftime('%m/%Y')})")
+            updated = True
 
     # Integra chart (6).csv
     c6_data = integrate_file("chart (6).csv", ["Gov global EUR", "SGLD"])
@@ -268,16 +254,13 @@ def main():
         for name, s in c6_data.items():
             if name in df_chart.columns:
                 df_chart.drop(columns=[name], inplace=True)
-            # Allinea all'indice del chart predefinito
-            s_aligned = s.reindex(df_chart.index)
-            non_empty = s_aligned.dropna()
-            if not non_empty.empty:
-                first_val = non_empty.iloc[0]
-                s_normalized = (s_aligned / first_val) * 10000
-                s_normalized = s_normalized.ffill()
-                df_chart = df_chart.join(s_normalized, how='outer')
-                print(f"[+] Integrato {name} (normalizzato a 10000 in {non_empty.index[0].strftime('%m/%Y')})")
-                updated = True
+            # Re-normalizza al primo valore disponibile della serie
+            first_val = s.dropna().iloc[0]
+            s_normalized = (s / first_val) * 10000
+            s_normalized = s_normalized.ffill()
+            df_chart = df_chart.join(s_normalized, how='outer')
+            print(f"[+] Integrato {name} (normalizzato a 10000 in {s.dropna().index[0].strftime('%m/%Y')})")
+            updated = True
         
     # Salva il file se almeno una colonna è stata aggiunta/aggiornata
     if updated:
