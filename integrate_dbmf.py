@@ -176,14 +176,23 @@ def integrate_socgen():
     print(f"[+] Dati Société Générale elaborati e rettificati. Periodo: {s_monthly.index.min().strftime('%m/%Y')} - {s_monthly.index.max().strftime('%m/%Y')}")
     return s_monthly
 
+def find_file(file_name):
+    if os.path.exists(file_name):
+        return file_name
+    downloads_path = os.path.join("C:\\Users\\ppln_\\Downloads", file_name)
+    if os.path.exists(downloads_path):
+        return downloads_path
+    return None
+
 def integrate_file(file_name, col_names):
-    if not os.path.exists(file_name):
+    actual_path = find_file(file_name)
+    if not actual_path:
         print(f"[-] File '{file_name}' non trovato. Salto l'integrazione.")
         return None
     
-    print(f"[+] Trovato '{file_name}'. Elaborazione in corso...")
+    print(f"[+] Trovato '{file_name}' in: {actual_path}. Elaborazione in corso...")
     try:
-        df = pd.read_csv(file_name)
+        df = pd.read_csv(actual_path)
         # Assicurati che Date sia convertito correttamente
         df['Date'] = pd.to_datetime(df['Date'], format='%m/%Y')
         df.set_index('Date', inplace=True)
@@ -210,13 +219,15 @@ def main():
     
     updated = False
     
-    # Integra i file estesi caricati (chart (7) - chart (11))
+    # Integra i file estesi caricati (chart (7) - chart (14))
     extended_files = {
         "chart (7).csv": ["SCV"],
         "chart (8).csv": ["MVOL"],
         "chart (9).csv": ["XDEM"],
         "chart (10).csv": ["EIMI"],
-        "chart (11).csv": ["XDEV"]
+        "chart (11).csv": ["XDEV"],
+        "chart (13).csv": ["IWDA + EMIM"],
+        "chart (14).csv": ["IWDA"]
     }
     
     for file_name, cols in extended_files.items():
