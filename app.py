@@ -309,49 +309,8 @@ def main():
                 combined_data.sort_index(inplace=True)
                 if uploaded_files: # Mostra info solo se utente ha caricato file, per non intasare la vista default
                     st.success("Dati combinati con successo.")
-                    st.write("Anteprima dei dati combinati prima della pulizia:")
+                    st.write("Anteprima dei dati combinati:")
                     st.dataframe(combined_data.head())
-
-                # --- INIZIO: Codice per la pulizia dei dati (rimozione date incomplete) ---
-                if uploaded_files:
-                    st.info("Pulizia dati: rimozione date senza valori per tutti gli indici...")
-                
-                # Identifica le colonne che sono numeri - queste sono le probabili colonne degli indici
-                # Usa .copy() per evitare SettingWithCopyWarning
-                combined_data_cleaned = combined_data.copy()
-                numeric_cols_before_cleaning = combined_data_cleaned.select_dtypes(include=np.number).columns.tolist()
-
-                if numeric_cols_before_cleaning:
-                    # Rimuovi righe (date) dove almeno una delle colonne numeriche ha un valore NaN
-                    # Questo mantiene solo le date per cui TUTTI gli indici numerici hanno un valore.
-                    initial_rows = combined_data_cleaned.shape[0]
-                    combined_data_cleaned.dropna(subset=numeric_cols_before_cleaning, inplace=True)
-                    rows_after_cleaning = combined_data_cleaned.shape[0]
-
-                    if combined_data_cleaned.empty:
-                        st.error("Dopo la pulizia dei dati, non ci sono date rimanenti con valori completi per tutti gli indici.")
-                        combined_data = None # Imposta combined_data originale a None
-                    else:
-                        dropped_rows_count = initial_rows - rows_after_cleaning
-                        if dropped_rows_count > 0 and uploaded_files:
-                            st.warning(f"Rimosse {dropped_rows_count} righe (date) a causa di valori mancanti per alcuni indici.")
-                        
-                        if uploaded_files:
-                            st.success(f"Pulizia dati completata. Rimaste {combined_data_cleaned.shape[0]} date con dati completi per tutti gli indici numerici.")
-                            st.write("Anteprima dei dati puliti:")
-                            st.dataframe(combined_data_cleaned.head())
-                        
-                        combined_data = combined_data_cleaned # Aggiorna combined_data con il DataFrame pulito
-                else:
-                    if uploaded_files:
-                        st.warning("Nessuna colonna numerica trovata per la pulizia dei dati.")
-                    # Se non ci sono colonne numeriche, prosegui con i dati non puliti numericamente,
-                    # ma combined_data è già stato assegnato e ordinato sopra.
-                    if uploaded_files:
-                        st.info("Proseguendo con i dati combinati senza pulizia specifica per colonne numeriche.")
-
-
-                # --- FINE: Codice per la pulizia dei dati ---
 
         except Exception as e:
             st.error(f"Errore durante la combinazione o la pulizia dei dati: {e}")
@@ -401,7 +360,7 @@ def main():
                     if selected_portfolio_assets and all(asset in combined_data.columns for asset in selected_portfolio_assets):
                         st.info("Creazione portafoglio...")
                         try:
-                            portfolio_data = create_portfolio(combined_data[selected_portfolio_assets], weights)
+                            portfolio_data = create_portfolio(combined_data[selected_portfolio_assets].dropna(), weights)
                             if portfolio_data is not None and not portfolio_data.empty:
                                 # Rimuovi la colonna 'Portafoglio' se già esiste per evitare duplicati
                                 if 'Portafoglio' in combined_data.columns:
@@ -465,7 +424,7 @@ def main():
 
             # Seleziona solo i dati per l'analisi dagli indici selezionati
             # Assicurati che le colonne selezionate esistano nel DataFrame dopo la pulizia
-            analysis_data = combined_data[[idx for idx in selected_indices if idx in combined_data.columns]]
+            analysis_data = combined_data[[idx for idx in selected_indices if idx in combined_data.columns]].dropna()
             actual_analysis_indices = analysis_data.columns.tolist() # Usa actual columns after filtering
 
             if not analysis_data.empty:
