@@ -176,6 +176,30 @@ def integrate_socgen():
     print(f"[+] Dati Société Générale elaborati e rettificati. Periodo: {s_monthly.index.min().strftime('%m/%Y')} - {s_monthly.index.max().strftime('%m/%Y')}")
     return s_monthly
 
+def integrate_file(file_name, col_names):
+    if not os.path.exists(file_name):
+        print(f"[-] File '{file_name}' non trovato. Salto l'integrazione.")
+        return None
+    
+    print(f"[+] Trovato '{file_name}'. Elaborazione in corso...")
+    try:
+        df = pd.read_csv(file_name)
+        # Assicurati che Date sia convertito correttamente
+        df['Date'] = pd.to_datetime(df['Date'], format='%m/%Y')
+        df.set_index('Date', inplace=True)
+        df.sort_index(inplace=True)
+        
+        res = {}
+        for col in col_names:
+            if col in df.columns:
+                res[col] = df[col].astype(float)
+            else:
+                print(f"[-] Colonna '{col}' non trovata nel file '{file_name}'.")
+        return res
+    except Exception as e:
+        print(f"[-] Errore nell'elaborazione del file '{file_name}': {e}")
+        return None
+
 def main():
     try:
         df_chart = load_default_chart()
@@ -183,6 +207,8 @@ def main():
     except Exception as e:
         print(f"[-] Errore critico nel caricamento di chart_default.csv: {e}")
         return
+    
+    updated = False
     
     # Integra Testfolio
     s_testfolio = integrate_testfolio()
@@ -200,6 +226,7 @@ def main():
         # Ffill per i valori successivi all'ultimo dato per sicurezza
         df_chart[s_testfolio.name] = df_chart[s_testfolio.name].ffill()
         print(f"[+] Integrato {s_testfolio.name} nel DataFrame.")
+        updated = True
         
     # Integra Société Générale
     s_socgen = integrate_socgen()
@@ -216,10 +243,44 @@ def main():
         df_chart.loc[df_chart.index < first_date, s_socgen.name] = 10000.0
         df_chart[s_socgen.name] = df_chart[s_socgen.name].ffill()
         print(f"[+] Integrato {s_socgen.name} nel DataFrame.")
+        updated = True
+
+    # Integra chart (5).csv
+    c5_data = integrate_file("chart (5).csv", ["SCV+MOM"])
+    if c5_data:
+        for name, s in c5_data.items():
+            if name in df_chart.columns:
+                df_chart.drop(columns=[name], inplace=True)
+            # Allinea all'indice del chart predefinito
+            s_aligned = s.reindex(df_chart.index)
+            non_empty = s_aligned.dropna()
+            if not non_empty.empty:
+                first_val = non_empty.iloc[0]
+                s_normalized = (s_aligned / first_val) * 10000
+                s_normalized = s_normalized.ffill()
+                df_chart = df_chart.join(s_normalized, how='outer')
+                print(f"[+] Integrato {name} (normalizzato a 10000 in {non_empty.index[0].strftime('%m/%Y')})")
+                updated = True
+
+    # Integra chart (6).csv
+    c6_data = integrate_file("chart (6).csv", ["Gov global EUR", "SGLD"])
+    if c6_data:
+        for name, s in c6_data.items():
+            if name in df_chart.columns:
+                df_chart.drop(columns=[name], inplace=True)
+            # Allinea all'indice del chart predefinito
+            s_aligned = s.reindex(df_chart.index)
+            non_empty = s_aligned.dropna()
+            if not non_empty.empty:
+                first_val = non_empty.iloc[0]
+                s_normalized = (s_aligned / first_val) * 10000
+                s_normalized = s_normalized.ffill()
+                df_chart = df_chart.join(s_normalized, how='outer')
+                print(f"[+] Integrato {name} (normalizzato a 10000 in {non_empty.index[0].strftime('%m/%Y')})")
+                updated = True
         
-    # Salva il file se almeno una colonna è stata aggiunta
-    if s_testfolio is not None or s_socgen is not None:
-        # Rimuove righe con Date completamente vuote o non allineate (opzionale)
+    # Salva il file se almeno una colonna è stata aggiunta/aggiornata
+    if updated:
         save_default_chart(df_chart)
     else:
         print("[-] Nessuna modifica effettuata (nessun file sorgente trovato).")
