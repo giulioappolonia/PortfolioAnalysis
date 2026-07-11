@@ -3,14 +3,25 @@ import json
 import numpy as np
 import pandas as pd
 
+# Helper per i percorsi dinamici (gestisce l'esecuzione dalla radice o da una cartella come tools/)
+script_dir = os.path.dirname(os.path.abspath(__file__))
+if os.path.basename(script_dir) in ["tools", "scripts"]:
+    project_root = os.path.dirname(script_dir)
+else:
+    project_root = script_dir
+data_dir = os.path.join(project_root, "data")
+
+import sys
+sys.path.append(project_root)
+
 def load_default_chart():
-    csv_path = "chart_default.csv"
-    backup_path = "chart_default_backup.csv"
+    csv_path = os.path.join(data_dir, "chart_default.csv")
+    backup_path = os.path.join(data_dir, "chart_default_backup.csv")
     
     # Se esiste il backup pulito, carichiamo sempre dal backup per evitare di accumulare modifiche o date duplicate
     path_to_load = backup_path if os.path.exists(backup_path) else csv_path
     if not os.path.exists(path_to_load):
-        raise FileNotFoundError(f"Impossibile trovare il file {path_to_load} nel percorso corrente.")
+        raise FileNotFoundError(f"Impossibile trovare il file {path_to_load}.")
     
     print(f"[+] Caricamento dati da: {path_to_load}")
     df = pd.read_csv(path_to_load)
@@ -20,9 +31,9 @@ def load_default_chart():
     return df
 
 def save_default_chart(df):
-    csv_path = "chart_default.csv"
+    csv_path = os.path.join(data_dir, "chart_default.csv")
     # Crea una copia di backup prima di sovrascrivere
-    backup_path = "chart_default_backup.csv"
+    backup_path = os.path.join(data_dir, "chart_default_backup.csv")
     if not os.path.exists(backup_path):
         import shutil
         shutil.copyfile(csv_path, backup_path)
@@ -47,12 +58,12 @@ def resample_series_monthly(s):
     return s_resampled
 
 def integrate_testfolio():
-    json_path = "dbmfsim_raw.json"
+    json_path = os.path.join(data_dir, "dbmfsim_raw.json")
     if not os.path.exists(json_path):
-        print("[-] File 'dbmfsim_raw.json' non trovato. Salto l'integrazione di Testfolio.")
+        print(f"[-] File '{json_path}' non trovato. Salto l'integrazione di Testfolio.")
         return None
     
-    print("[+] Trovato 'dbmfsim_raw.json'. Elaborazione in corso...")
+    print(f"[+] Trovato '{json_path}'. Elaborazione in corso...")
     with open(json_path, "r", encoding="utf-8") as f:
         raw_data = json.load(f)
     

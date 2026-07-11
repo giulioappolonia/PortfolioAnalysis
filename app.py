@@ -218,7 +218,7 @@ def main():
         
         # Carica il file di default se richiesto dall'utente tramite checkbox
         if keep_default:
-            default_file = "chart_default.csv"
+            default_file = os.path.join("data", "chart_default.csv")
             if os.path.exists(default_file):
                 try:
                     data = load_data(default_file)
@@ -230,7 +230,7 @@ def main():
                     st.error(f"Errore nel caricamento del file di esempio: {e}")
     else:
         # Logica per caricare il file di default se nessun file è stato caricato
-        default_file = "chart_default.csv"
+        default_file = os.path.join("data", "chart_default.csv")
         if os.path.exists(default_file):
             st.info("Nessun file caricato. Caricamento dati di esempio...")
             try:
@@ -251,7 +251,7 @@ def main():
         reg_display_currency = st.session_state.get("reg_display_currency", "EUR")
         
         for file_name, df in list(loaded_dfs.items()):
-            input_curr = "EUR" if file_name == "chart_default.csv" else input_currencies.get(file_name, "EUR")
+            input_curr = "EUR" if os.path.basename(file_name) == "chart_default.csv" else input_currencies.get(file_name, "EUR")
             
             if input_curr != reg_display_currency:
                 try:
