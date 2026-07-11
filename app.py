@@ -2,7 +2,12 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import os
+import sys
 import tempfile
+
+# Aggiunge la cartella src al percorso di ricerca dei moduli
+sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
+
 from data_loader import load_data # Assumi che esista data_loader.py con la funzione load_data
 from rolling_calculations import (calculate_rolling_returns, calculate_min_median_by_window, calculate_risk_metrics, create_portfolio) # Assumi esista rolling_calculations.py
 from plots import (plot_rolling_returns, plot_boxplot, plot_violinplot, plot_min_vs_window, plot_median_vs_window, plot_combined_min_median, plot_detailed_window_analysis, plot_overlaid_histogram, plot_single_histogram_with_normal) # Assumi esista plots.py
