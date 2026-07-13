@@ -135,7 +135,9 @@ Seleziona le opzioni dalla barra laterale e carica uno o più file **CSV o Excel
 with st.sidebar:
     st.header("Opzioni")
     uploaded_files = st.file_uploader("Carica uno o più file CSV o Excel", type=["csv", "xls", "xlsx"], accept_multiple_files=True)
-    
+    if uploaded_files:
+        uploaded_files = sorted(uploaded_files, key=lambda f: f.name)
+        
     keep_default = False
     input_currencies = {}
     if uploaded_files:
