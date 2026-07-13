@@ -839,10 +839,11 @@ def main():
                                 help="Valuta in cui sono denominati i prezzi storici del ticker su Yahoo Finance."
                             )
                             detected_freq = st.selectbox(
-                                "Frequenza dei dati",
+                                "Frequenza dell'analisi (Regressione)",
                                 options=["monthly", "daily"],
                                 index=0,
-                                key="reg_freq_yfinance"
+                                key="reg_freq_yfinance",
+                                help="mensile (Consigliato): Standard accademico, riduce il rumore del mercato ed è più rapido. giornaliera: Maggior dettaglio temporale ma introduce rumore di breve termine."
                             )
                         
                             
