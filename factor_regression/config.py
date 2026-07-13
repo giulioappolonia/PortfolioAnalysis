@@ -51,6 +51,16 @@ REGION_DATASETS = {
             "factors": "Global_5_Factors_Daily",
             "momentum": "Global_Mom_Factor_Daily"
         }
+    },
+    "Developed ex US": {
+        "monthly": {
+            "factors": "Developed_ex_US_5_Factors",
+            "momentum": "Developed_ex_US_Mom_Factor"
+        },
+        "daily": {
+            "factors": "Developed_ex_US_5_Factors_Daily",
+            "momentum": "Developed_ex_US_Mom_Factor_Daily"
+        }
     }
 }
 

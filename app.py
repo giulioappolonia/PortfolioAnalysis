@@ -849,7 +849,7 @@ def main():
                     with col_cfg2:
                         ff_region = st.selectbox(
                             "Regione dei Fattori Kenneth French",
-                            options=["USA", "Developed Markets", "Europe", "Emerging Markets", "Global"],
+                            options=["USA", "Developed Markets", "Developed ex US", "Europe", "Emerging Markets", "Global"],
                             index=0,
                             key="ff_region"
                         )
