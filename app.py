@@ -245,12 +245,15 @@ def main():
 
     # Dopo aver processato tutti i file (caricati o default), combina i DataFrames
     if loaded_dfs:
+        # Salva una copia di backup dei dati nativi (non convertiti) in session_state per i calcoli della regressione
+        st.session_state["loaded_dfs_native"] = {}
         # Conversione valute allineando alla valuta di visualizzazione reg_display_currency
         rates_df = None
         rates_m = None
         reg_display_currency = st.session_state.get("reg_display_currency", "EUR")
         
         for file_name, df in list(loaded_dfs.items()):
+            st.session_state["loaded_dfs_native"][file_name] = df.copy()
             input_curr = "EUR" if os.path.basename(file_name) == "chart_default.csv" else input_currencies.get(file_name, "EUR")
             
             if input_curr != reg_display_currency:
@@ -901,12 +904,25 @@ def main():
                         try:
                             reg_display_currency = st.session_state.get("reg_display_currency", "EUR")
                             
-                            # Prepara i dati dei rendimenti
                             if reg_data_source == "Indice Caricato":
-                                asset_raw_prices = pd.DataFrame(analysis_data[selected_reg_asset].dropna())
-                                asset_raw_prices.columns = ['price']
-                                asset_name = selected_reg_asset
-                                asset_curr = reg_display_currency
+                                # Cerca il file originale nei dati nativi per estrarre il prezzo originario e la valuta nativa
+                                loaded_dfs_native = st.session_state.get("loaded_dfs_native", {})
+                                origin_file = None
+                                for fname, df_native in loaded_dfs_native.items():
+                                    if selected_reg_asset in df_native.columns:
+                                        origin_file = fname
+                                        break
+                                
+                                if origin_file:
+                                    asset_raw_prices = pd.DataFrame(loaded_dfs_native[origin_file][selected_reg_asset].dropna())
+                                    asset_raw_prices.columns = ['price']
+                                    asset_name = selected_reg_asset
+                                    asset_curr = "EUR" if os.path.basename(origin_file) == "chart_default.csv" else input_currencies.get(origin_file, "EUR")
+                                else:
+                                    asset_raw_prices = pd.DataFrame(analysis_data[selected_reg_asset].dropna())
+                                    asset_raw_prices.columns = ['price']
+                                    asset_name = selected_reg_asset
+                                    asset_curr = reg_display_currency
                             else:
                                 if not reg_ticker.strip():
                                     st.error("Inserisci un ticker Yahoo Finance valido.")
