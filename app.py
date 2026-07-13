@@ -142,6 +142,7 @@ with st.sidebar:
         keep_default = st.checkbox("Mantieni dati di esempio", value=False, help="Spunta per mantenere gli indici di esempio precaricati insieme ai file caricati.")
         
         # Mostra le tendine di valuta nativa subito sotto i file caricati per massima visibilità
+        # Manteniamo l'ordine originale di caricamento (come appare nel widget)
         for uploaded_file in uploaded_files:
             input_currencies[uploaded_file.name] = st.selectbox(
                 f"Valuta per {uploaded_file.name}",
