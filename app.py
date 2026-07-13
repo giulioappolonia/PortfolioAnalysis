@@ -157,7 +157,7 @@ with st.sidebar:
         for uploaded_file in uploaded_files:
             input_currencies[uploaded_file.name] = st.selectbox(
                 f"Valuta per {uploaded_file.name}",
-                options=["EUR", "USD"],
+                options=["Seleziona...", "EUR", "USD"],
                 index=0,
                 key=f"input_currency_{uploaded_file.name}",
                 help=f"Seleziona la valuta nativa dei dati in {uploaded_file.name}."
@@ -182,6 +182,15 @@ with st.sidebar:
 
 def main():
     input_currencies = {}
+    if uploaded_files:
+        for uploaded_file in uploaded_files:
+            input_currencies[uploaded_file.name] = st.session_state.get(f"input_currency_{uploaded_file.name}", "Seleziona...")
+            
+        missing_currencies = [fname for fname, curr in input_currencies.items() if curr == "Seleziona..."]
+        if missing_currencies:
+            st.warning("⚠️ **Configurazione Valuta Incompleta**: Seleziona la valuta di origine per ciascun file caricato nella barra laterale per sbloccare l'analisi.")
+            st.stop()
+
     combined_data = None
     loaded_dfs = {} # Dizionario per conservare i DataFrames caricati da ciascun file
 
