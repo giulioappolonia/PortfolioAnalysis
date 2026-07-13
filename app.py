@@ -137,9 +137,20 @@ with st.sidebar:
     uploaded_files = st.file_uploader("Carica uno o più file CSV o Excel", type=["csv", "xls", "xlsx"], accept_multiple_files=True)
     
     keep_default = False
+    input_currencies = {}
     if uploaded_files:
         keep_default = st.checkbox("Mantieni dati di esempio", value=False, help="Spunta per mantenere gli indici di esempio precaricati insieme ai file caricati.")
-    
+        
+        # Mostra le tendine di valuta nativa subito sotto i file caricati per massima visibilità
+        for uploaded_file in uploaded_files:
+            input_currencies[uploaded_file.name] = st.selectbox(
+                f"Valuta per {uploaded_file.name}",
+                options=["Seleziona...", "EUR", "USD"],
+                index=0,
+                key=f"input_currency_{uploaded_file.name}",
+                help=f"Seleziona la valuta nativa dei dati in {uploaded_file.name}."
+            )
+            
     st.markdown("---")
     st.markdown("### Configurazione Valute")
     reg_display_currency = st.selectbox(
@@ -149,19 +160,6 @@ with st.sidebar:
         key="reg_display_currency",
         help="Seleziona la valuta in cui visualizzare i rendimenti effettivi, stimati e la scomposizione della performance."
     )
-    
-    # Valuta di input per ciascun file caricato
-    input_currencies = {}
-    if uploaded_files:
-        st.markdown("**Valuta dei File Caricati:**")
-        for uploaded_file in uploaded_files:
-            input_currencies[uploaded_file.name] = st.selectbox(
-                f"Valuta per {uploaded_file.name}",
-                options=["Seleziona...", "EUR", "USD"],
-                index=0,
-                key=f"input_currency_{uploaded_file.name}",
-                help=f"Seleziona la valuta nativa dei dati in {uploaded_file.name}."
-            )
     st.markdown("---")
     
     analysis_mode = st.radio("Modalità di analisi", ["Confronto Completo", "Indice Singolo", "Confronto Indici", "Portafoglio"], index=0)
