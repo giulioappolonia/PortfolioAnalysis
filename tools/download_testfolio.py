@@ -17,7 +17,7 @@ def extract_share_code(url_or_code):
         return match_segment.group(1)
     return url_or_code
 
-def download_testfolio_data(share_code, output_csv="testfolio_data.csv"):
+def download_testfolio_data(share_code, output_csv="testfolio_data.csv", frequency="monthly"):
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Content-Type": "application/json",
@@ -104,7 +104,7 @@ def download_testfolio_data(share_code, output_csv="testfolio_data.csv"):
         timestamps = history[0]
         portfolio_series = history[1:]
         
-        # Creiamo un DataFrame
+        # Creiamo un DataFrame giornaliero
         dates = pd.to_datetime(timestamps, unit="s")
         df = pd.DataFrame(index=dates)
         df.index.name = "Date"
@@ -112,10 +112,27 @@ def download_testfolio_data(share_code, output_csv="testfolio_data.csv"):
         for name, series_data in zip(portfolio_names, portfolio_series):
             df[name] = series_data
             
+        # Applicazione della frequenza desiderata
+        if frequency == "monthly":
+            print("[+] Ricampionamento dei dati a frequenza mensile (Month-End)...")
+            try:
+                df = df.resample('ME').last()
+            except ValueError:
+                df = df.resample('M').last()
+            
+            # Imposta la data al primo giorno del mese per allinearsi a chart_default.csv
+            df.index = df.index.map(lambda x: x.replace(day=1))
+            # Formatta le date nel formato MM/YYYY
+            df.index = df.index.strftime('%m/%Y')
+            print("[+] Formattazione date applicata: MM/YYYY")
+            
         # Salvataggio
         df.to_csv(output_csv)
-        print(f"[+] Dati scaricati con successo!")
-        print(f"    - Periodo: {df.index.min().strftime('%Y-%m-%d')} a {df.index.max().strftime('%Y-%m-%d')}")
+        print(f"[+] Dati salvati con successo!")
+        if frequency == "monthly":
+            print(f"    - Periodo: {df.index[0]} a {df.index[-1]}")
+        else:
+            print(f"    - Periodo: {df.index.min().strftime('%Y-%m-%d')} a {df.index.max().strftime('%Y-%m-%d')}")
         print(f"    - Righe caricate: {len(df)}")
         print(f"    - File salvato in: {os.path.abspath(output_csv)}")
         return True
@@ -126,20 +143,30 @@ def download_testfolio_data(share_code, output_csv="testfolio_data.csv"):
 if __name__ == "__main__":
     url_input = "https://testfol.io/?s=0o9uikSA3ft"
     csv_output = "DatiInput/testfolio_backtest_data.csv"
+    frequency = "monthly"
     
-    if len(sys.argv) > 1:
-        url_input = sys.argv[1]
-    if len(sys.argv) > 2:
-        csv_output = sys.argv[2]
+    # Parsing degli argomenti riga di comando
+    args = sys.argv[1:]
+    
+    # Se viene specificato --daily, usiamo la frequenza giornaliera
+    if "--daily" in args:
+        frequency = "daily"
+        args.remove("--daily")
+        
+    if len(args) > 0:
+        url_input = args[0]
+    if len(args) > 1:
+        csv_output = args[1]
         
     code = extract_share_code(url_input)
     print(f"[*] Elaborazione URL/Codice: {url_input} (Codice estratto: {code})")
+    print(f"[*] Frequenza impostata: {frequency}")
     
-    # Assicuriamoci che la cartella DatiInput esista se usiamo quella di default
+    # Assicuriamoci che la cartella del file di output esista
     out_dir = os.path.dirname(csv_output)
     if out_dir and not os.path.exists(out_dir):
         os.makedirs(out_dir, exist_ok=True)
         
-    success = download_testfolio_data(code, csv_output)
+    success = download_testfolio_data(code, csv_output, frequency)
     if not success:
         sys.exit(1)
